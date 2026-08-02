@@ -1,0 +1,63 @@
+{
+	"Name": "Riot Rank Tracker",
+	"Version": "1.0.0.0",
+	"Author": "Packrat",
+	"Actions": [
+		{
+			"Name": "LoL Rank",
+			"UUID": "com.packrat.riot-tracker.lol-rank",
+			"Icon": "imgs/actions/lol-rank/icon",
+			"Tooltip": "Your current League of Legends ranked tier, division and LP, with how much it has moved since yesterday or this week. Press to refresh.",
+			"PropertyInspectorPath": "ui/lol-rank.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/lol-rank/key",
+					"TitleAlignment": "bottom"
+				}
+			]
+		},
+		{
+			"Name": "TFT Rank",
+			"UUID": "com.packrat.riot-tracker.tft-rank",
+			"Icon": "imgs/actions/tft-rank/icon",
+			"Tooltip": "Your current Teamfight Tactics ranked tier, division and LP, with how much it has moved since yesterday or this week. Press to refresh.",
+			"PropertyInspectorPath": "ui/tft-rank.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/tft-rank/key",
+					"TitleAlignment": "bottom"
+				}
+			]
+		}
+	],
+	"Category": "Riot Rank Tracker",
+	"CategoryIcon": "imgs/plugin/category-icon",
+	"CodePath": "bin/plugin.js",
+	"Description": "Your own League of Legends and TFT rank on your deck, updating on its own while you play or stream. No alt-tabbing to the client to check LP. Bring your own personal Riot API key. Not affiliated with, endorsed by, or sponsored by Riot Games, League of Legends, or Teamfight Tactics.",
+	"Icon": "imgs/plugin/marketplace",
+	"SDKVersion": 3,
+	"Software": {
+		"MinimumVersion": "6.9"
+	},
+	"OS": [
+		{
+			"Platform": "windows",
+			"MinimumVersion": "10"
+		},
+		{
+			"Platform": "mac",
+			"MinimumVersion": "12"
+		}
+	],
+	"Nodejs": {
+		"Version": "20",
+		"Debug": "enabled"
+	},
+	"UUID": "com.packrat.riot-tracker"
+}

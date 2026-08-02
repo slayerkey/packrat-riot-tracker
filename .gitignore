@@ -1,0 +1,4 @@
+node_modules/
+com.packrat.riot-tracker.sdPlugin/logs/
+com.packrat.riot-tracker.sdPlugin/bin/
+*.streamDeckPlugin

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>LoL Rank</title>
+		<link rel="stylesheet" href="pi.css" />
+	</head>
+	<body data-kind="lol-rank">
+		<h2>Your League of Legends rank</h2>
+
+		<div class="row split">
+			<div class="field">
+				<label class="key" for="gameName">Riot ID</label>
+				<input id="gameName" type="text" placeholder="Game name" autocomplete="off" />
+			</div>
+			<div class="field" style="flex: 0 0 90px">
+				<input id="tagLine" type="text" placeholder="TAG" autocomplete="off" />
+			</div>
+		</div>
+
+		<div class="row">
+			<label class="key" for="platform">Region</label>
+			<div class="field">
+				<select id="platform">
+					<option value="na1">NA</option>
+					<option value="euw1">EUW</option>
+					<option value="eune1">EUNE</option>
+					<option value="kr">KR</option>
+					<option value="br1">BR</option>
+					<option value="la1">LAN</option>
+					<option value="la2">LAS</option>
+					<option value="oc1">OCE</option>
+					<option value="jp1">JP</option>
+				</select>
+			</div>
+		</div>
+
+		<div class="row">
+			<label class="key" for="apiKey">API key</label>
+			<div class="field">
+				<input id="apiKey" type="password" placeholder="RGAPI-..." autocomplete="off" />
+			</div>
+		</div>
+
+		<p class="hint">Shows your current solo/duo tier, division and LP, plus how much it has moved since yesterday or this week once the key has been tracking that long.</p>
+
+		<p class="warn">Personal Riot keys expire every 24 hours. When it stops updating, grab a fresh one at developer.riotgames.com and paste it back in here.</p>
+
+		<p class="disclaimer">Not affiliated with, endorsed by, or sponsored by Riot Games or League of Legends. Your Riot ID and API key are stored only on this device, in this key's own settings.</p>
+
+		<script src="pi.js"></script>
+	</body>
+</html>
