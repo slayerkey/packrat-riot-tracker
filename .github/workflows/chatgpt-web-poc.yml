@@ -1,6 +1,9 @@
 name: ChatGPT Web proof of concept
 
 on:
+  push:
+    branches:
+      - chatgpt-web-poc-20260822
   pull_request:
     branches:
       - master
