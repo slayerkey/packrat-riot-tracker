@@ -1,0 +1,52 @@
+name: ChatGPT Web proof of concept
+
+on:
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Validate with Elgato CLI
+        run: npx @elgato/cli validate com.packrat.riot-tracker.sdPlugin --no-update-check
+
+      - name: Run host independent RatPack QA
+        run: python scripts/web_poc_qa.py
+
+      - name: Package Stream Deck plugin
+        run: npx @elgato/cli pack com.packrat.riot-tracker.sdPlugin --output dist --no-update-check
+
+      - name: Upload release candidate and QA report
+        uses: actions/upload-artifact@v4
+        with:
+          name: riot-rank-tracker-web-poc
+          path: |
+            dist/*.streamDeckPlugin
+            dist/web-poc-qa.json
+          if-no-files-found: error
