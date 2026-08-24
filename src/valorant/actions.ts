@@ -28,11 +28,12 @@ function scheduleAppearanceRefresh(): void {
 	appearanceRefreshTimer = setTimeout(() => {
 		appearanceRefreshTimer = null;
 		void valorantService.refresh(false);
-	}, 150);
+	}, 400);
 }
 
 abstract class MetricActionBase extends SingletonAction<ActionSettings> {
 	protected abstract metric: Metric;
+	private settingsByAction = new WeakMap<object, ActionSettings>();
 
 	constructor() {
 		super();
@@ -41,29 +42,37 @@ abstract class MetricActionBase extends SingletonAction<ActionSettings> {
 
 	override async onWillAppear(ev: WillAppearEvent<ActionSettings>): Promise<void> {
 		if (!ev.action.isKey()) return;
-		await this.paint(ev.action, ev.payload.settings);
+		const settings = ev.payload.settings ?? {};
+		this.settingsByAction.set(ev.action as unknown as object, settings);
+		await this.paint(ev.action, settings);
 		scheduleAppearanceRefresh();
 	}
 
 	override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<ActionSettings>): Promise<void> {
-		if (ev.action.isKey()) await this.paint(ev.action, ev.payload.settings);
+		if (!ev.action.isKey()) return;
+		const settings = ev.payload.settings ?? {};
+		this.settingsByAction.set(ev.action as unknown as object, settings);
+		await this.paint(ev.action, settings);
 	}
 
 	override async onKeyDown(ev: KeyDownEvent<ActionSettings>): Promise<void> {
-		await valorantService.refresh(true);
 		await ev.action.showOk();
+		void valorantService.refresh(true);
 	}
 
 	async paintAll(): Promise<void> {
 		for (const instance of this.actions) {
 			if (!instance.isKey()) continue;
-			await this.paint(instance, await instance.getSettings<ActionSettings>());
+			const settings = this.settingsByAction.get(instance as unknown as object) ?? {};
+			await this.paint(instance, settings);
 		}
 	}
 
 	private async paint(key: KeyAction<ActionSettings>, settings: ActionSettings): Promise<void> {
-		const store = await valorantService.getStore();
-		await key.setImage(keyImage(renderMetric(this.metric, valorantService.state, settings ?? {}, store.account?.actEndDate)));
+		// Act Countdown is the only metric that needs an account setting at paint time. Avoid a
+		// getGlobalSettings IPC round trip for every other visible key on every repaint.
+		const actEndDate = this.metric === "act-countdown" ? (await valorantService.getStore()).account?.actEndDate : undefined;
+		await key.setImage(keyImage(renderMetric(this.metric, valorantService.state, settings ?? {}, actEndDate)));
 	}
 }
 
@@ -231,7 +240,7 @@ export class SpikeTimerAction extends SingletonAction<ActionSettings> {
 		this.timer = setInterval(() => {
 			void this.paintAll();
 			if (this.remaining() === 0) this.stopTicker();
-		}, 250);
+		}, 1000);
 	}
 
 	private stopTicker(): void {
