@@ -25,6 +25,56 @@ jobs:
           node-version: "20"
           cache: npm
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Run fixture tests
+        run: npm test
+
+      - name: Run RatPack structural QA
+        run: python scripts/valorant_qa.py
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Validate with Elgato CLI
+        run: npx @elgato/cli validate com.packrat.valorant-tracker.sdPlugin --no-update-check
+
+      - name: Package Stream Deck plugin
+        run: npx @elgato/cli pack com.packrat.valorant-tracker.sdPlugin --output dist --no-update-check
+
+      - name: Upload release candidate and QA report
+        uses: actions/upload-artifact@v4
+        with:
+          name: valorant-tracker-ci
+          path: |
+            dist/*.streamDeckPlugin
+            dist/valorant-qa.json
+          if-no-files-found: error
+
+  platform-smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
       - name: Install locked dependencies
         run: npm ci
 
@@ -36,13 +86,3 @@ jobs:
 
       - name: Validate with Elgato CLI
         run: npx @elgato/cli validate com.packrat.valorant-tracker.sdPlugin --no-update-check
-
-      - name: Package Stream Deck plugin
-        run: npx @elgato/cli pack com.packrat.valorant-tracker.sdPlugin --output dist --no-update-check
-
-      - name: Upload release candidate
-        uses: actions/upload-artifact@v4
-        with:
-          name: valorant-tracker-ci
-          path: dist/*.streamDeckPlugin
-          if-no-files-found: error
