@@ -1,0 +1,211 @@
+{
+	"Name": "Valorant Tracker",
+	"Version": "1.0.0.0",
+	"Author": "Packrat",
+	"Description": "A physical Valorant ranked dashboard for Stream Deck. Track rank, RR, session performance, recent competitive stats, act countdown and a 45-second spike timer using your own HenrikDev API key.",
+	"Category": "Valorant Tracker",
+	"CategoryIcon": "imgs/plugin/category-icon",
+	"Icon": "imgs/plugin/marketplace",
+	"CodePath": "bin/plugin.js",
+	"SDKVersion": 3,
+	"Software": {
+		"MinimumVersion": "6.9"
+	},
+	"OS": [
+		{
+			"Platform": "windows",
+			"MinimumVersion": "10"
+		},
+		{
+			"Platform": "mac",
+			"MinimumVersion": "12"
+		}
+	],
+	"Nodejs": {
+		"Version": "20",
+		"Debug": "enabled"
+	},
+	"UUID": "com.packrat.valorant-tracker",
+	"Actions": [
+		{
+			"Name": "Current Rank",
+			"UUID": "com.packrat.valorant-tracker.rank",
+			"Icon": "imgs/actions/common/icon",
+			"Tooltip": "Show your current Valorant competitive rank and RR. Press to refresh.",
+			"PropertyInspectorPath": "ui/config.html",
+			"Controllers": ["Keypad"],
+			"States": [{"Image": "imgs/actions/common/key", "TitleAlignment": "bottom"}]
+		},
+		{
+			"Name": "Current RR",
+			"UUID": "com.packrat.valorant-tracker.rr",
+			"Icon": "imgs/actions/common/icon",
+			"Tooltip": "Show current RR and the last competitive RR change. Press to refresh.",
+			"PropertyInspectorPath": "ui/config.html",
+			"Controllers": ["Keypad"],
+			"States": [{"Image": "imgs/actions/common/key", "TitleAlignment": "bottom"}]
+		},
+		{
+			"Name": "Session RR",
+			"UUID": "com.packrat.valorant-tracker.session-rr",
+			"Icon": "imgs/actions/common/icon",
+			"Tooltip": "Show net RR gained or lost in the current tracked session.",
+			"PropertyInspectorPath": "ui/config.html",
+			"Controllers": ["Keypad"],
+			"States": [{"Image": "imgs/actions/common/key", "TitleAlignment": "bottom"}]
+		},
+		{
+			"Name": "Session Record",
+			"UUID": "com.packrat.valorant-tracker.session-record",
+			"Icon": "imgs/actions/common/icon",
+			"Tooltip": "Show session wins and losses.",
+			"PropertyInspectorPath": "ui/config.html",
+			"Controllers": ["Keypad"],
+			"States": [{"Image": "imgs/actions/common/key", "TitleAlignment": "bottom"}]
+		},
+		{
+			"Name": "Last Match",
+			"UUID": "com.packrat.valorant-tracker.last-match",
+			"Icon": "imgs/actions/common/icon",
+			"Tooltip": "Show your latest competitive result and RR change.",
+			"PropertyInspectorPath": "ui/config.html",
+			"Controllers": ["Keypad"],
+			"States": [{"Image": "imgs/actions/common/key", "TitleAlignment": "bottom"}]
+		},
+		{
+			"Name": "Headshot %",
+			"UUID": "com.packrat.valorant-tracker.headshot",
+			"Icon": "imgs/actions/common/icon",
+			"Tooltip": "Show headshot percentage calculated from recent competitive matches.",
+			"PropertyInspectorPath": "ui/config.html",
+			"Controllers": ["Keypad"],
+			"States": [{"Image": "imgs/actions/common/key", "TitleAlignment": "bottom"}]
+		},
+		{
+			"Name": "Top Agent",
+			"UUID": "com.packrat.valorant-tracker.top-agent",
+			"Icon": "imgs/actions/common/icon",
+			"Tooltip": "Show a top recent competitive agent with K/D and win rate. Choose slot 1 to 5 in settings.",
+			"PropertyInspectorPath": "ui/config.html",
+			"Controllers": ["Keypad"],
+			"States": [{"Image": "imgs/actions/common/key", "TitleAlignment": "bottom"}]
+		},
+		{
+			"Name": "Agent K/D",
+			"UUID": "com.packrat.valorant-tracker.agent-kd",
+			"Icon": "imgs/actions/common/icon",
+			"Tooltip": "Show K/D for the selected top-agent slot.",
+			"PropertyInspectorPath": "ui/config.html",
+			"Controllers": ["Keypad"],
+			"States": [{"Image": "imgs/actions/common/key", "TitleAlignment": "bottom"}]
+		},
+		{
+			"Name": "Agent Win Rate",
+			"UUID": "com.packrat.valorant-tracker.agent-win-rate",
+			"Icon": "imgs/actions/common/icon",
+			"Tooltip": "Show win rate for the selected top-agent slot.",
+			"PropertyInspectorPath": "ui/config.html",
+			"Controllers": ["Keypad"],
+			"States": [{"Image": "imgs/actions/common/key", "TitleAlignment": "bottom"}]
+		},
+		{
+			"Name": "Damage",
+			"UUID": "com.packrat.valorant-tracker.damage",
+			"Icon": "imgs/actions/common/icon",
+			"Tooltip": "Show damage dealt in the latest competitive match.",
+			"PropertyInspectorPath": "ui/config.html",
+			"Controllers": ["Keypad"],
+			"States": [{"Image": "imgs/actions/common/key", "TitleAlignment": "bottom"}]
+		},
+		{
+			"Name": "Top Map",
+			"UUID": "com.packrat.valorant-tracker.top-map",
+			"Icon": "imgs/actions/common/icon",
+			"Tooltip": "Show a top recent competitive map with win rate. Choose slot 1 to 5 in settings.",
+			"PropertyInspectorPath": "ui/config.html",
+			"Controllers": ["Keypad"],
+			"States": [{"Image": "imgs/actions/common/key", "TitleAlignment": "bottom"}]
+		},
+		{
+			"Name": "Map Win Rate",
+			"UUID": "com.packrat.valorant-tracker.map-win-rate",
+			"Icon": "imgs/actions/common/icon",
+			"Tooltip": "Show win rate for the selected top-map slot.",
+			"PropertyInspectorPath": "ui/config.html",
+			"Controllers": ["Keypad"],
+			"States": [{"Image": "imgs/actions/common/key", "TitleAlignment": "bottom"}]
+		},
+		{
+			"Name": "ACS",
+			"UUID": "com.packrat.valorant-tracker.acs",
+			"Icon": "imgs/actions/common/icon",
+			"Tooltip": "Show recent competitive average combat score.",
+			"PropertyInspectorPath": "ui/config.html",
+			"Controllers": ["Keypad"],
+			"States": [{"Image": "imgs/actions/common/key", "TitleAlignment": "bottom"}]
+		},
+		{
+			"Name": "Recent Match",
+			"UUID": "com.packrat.valorant-tracker.recent-match",
+			"Icon": "imgs/actions/common/icon",
+			"Tooltip": "Show a recent competitive match. Choose match 1 to 5 in settings.",
+			"PropertyInspectorPath": "ui/config.html",
+			"Controllers": ["Keypad"],
+			"States": [{"Image": "imgs/actions/common/key", "TitleAlignment": "bottom"}]
+		},
+		{
+			"Name": "Act Countdown",
+			"UUID": "com.packrat.valorant-tracker.act-countdown",
+			"Icon": "imgs/actions/common/icon",
+			"Tooltip": "Show time remaining until the optional configured act end date.",
+			"PropertyInspectorPath": "ui/config.html",
+			"Controllers": ["Keypad"],
+			"States": [{"Image": "imgs/actions/common/key", "TitleAlignment": "bottom"}]
+		},
+		{
+			"Name": "Spike Timer",
+			"UUID": "com.packrat.valorant-tracker.spike-timer",
+			"Icon": "imgs/actions/common/icon",
+			"Tooltip": "45 second tap-to-start spike timer. Tap while active to reset.",
+			"PropertyInspectorPath": "ui/config.html",
+			"Controllers": ["Keypad"],
+			"States": [{"Image": "imgs/actions/common/key", "TitleAlignment": "bottom"}]
+		},
+		{
+			"Name": "Log Win",
+			"UUID": "com.packrat.valorant-tracker.log-win",
+			"Icon": "imgs/actions/common/icon",
+			"Tooltip": "Manually log a session win. An optional one-time RR adjustment can be entered in settings.",
+			"PropertyInspectorPath": "ui/config.html",
+			"Controllers": ["Keypad"],
+			"States": [{"Image": "imgs/actions/common/key", "TitleAlignment": "bottom"}]
+		},
+		{
+			"Name": "Log Loss",
+			"UUID": "com.packrat.valorant-tracker.log-loss",
+			"Icon": "imgs/actions/common/icon",
+			"Tooltip": "Manually log a session loss. An optional one-time RR adjustment can be entered in settings.",
+			"PropertyInspectorPath": "ui/config.html",
+			"Controllers": ["Keypad"],
+			"States": [{"Image": "imgs/actions/common/key", "TitleAlignment": "bottom"}]
+		},
+		{
+			"Name": "Session Reset",
+			"UUID": "com.packrat.valorant-tracker.session-reset",
+			"Icon": "imgs/actions/common/icon",
+			"Tooltip": "Hold for 1.2 seconds to reset session wins, losses and net RR.",
+			"PropertyInspectorPath": "ui/config.html",
+			"Controllers": ["Keypad"],
+			"States": [{"Image": "imgs/actions/common/key", "TitleAlignment": "bottom"}]
+		},
+		{
+			"Name": "Refresh",
+			"UUID": "com.packrat.valorant-tracker.refresh",
+			"Icon": "imgs/actions/common/icon",
+			"Tooltip": "Force a shared HenrikDev refresh for every Valorant Tracker action.",
+			"PropertyInspectorPath": "ui/config.html",
+			"Controllers": ["Keypad"],
+			"States": [{"Image": "imgs/actions/common/key", "TitleAlignment": "bottom"}]
+		}
+	]
+}
