@@ -71,11 +71,19 @@
     "Setup: one shared Riot ID and HenrikDev API key"
   ],
   "release_notes": "Initial release of Valorant Tracker with 20 actions, shared HenrikDev account setup, session tracking, recent competitive statistics, manual result controls, a 45 second spike timer and bundled Standard, XL and Neo dashboards.",
-  "submission_state": "not_ready",
+  "submission_state": "manual_qa",
+  "verified_so_far": [
+    "Automated build, fixture, profile, structural, Marketplace art and Elgato CLI validation gates",
+    "Windows and macOS platform validation",
+    "Deterministic Marketplace art generation",
+    "Plugin category visible in current Stream Deck software",
+    "Global account settings persist between actions",
+    "Live HenrikDev Current Rank and Current RR data on a real account",
+    "Standard, XL and Neo profile archives are bundled in the plugin"
+  ],
   "remaining_submission_decisions": [
-    "Final marketplace price",
-    "Final deterministic marketplace art",
-    "Live HenrikDev smoke test with a real user key",
-    "Physical Stream Deck package and profile import test"
+    "Confirm Standard profile import and action resolution in current Stream Deck software",
+    "Broader physical key readability and interaction spot checks",
+    "Final marketplace price and submission review"
   ]
 }
