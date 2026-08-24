@@ -3,6 +3,7 @@ import type { AccountSettings, MmrHistoryPoint, PlayerMatch, Region } from "./mo
 const BASE_URL = "https://api.henrikdev.xyz";
 const assetCache = new Map<string, Promise<string | undefined>>();
 const rankIconCache = new Map<string, string | undefined>();
+const accountRegionCache = new Map<string, Region>();
 
 export class HenrikError extends Error {
 	constructor(
@@ -85,6 +86,11 @@ function asString(value: unknown, fallback = ""): string {
 	return typeof value === "string" ? value : fallback;
 }
 
+function normalizeRegion(value: unknown): Region | undefined {
+	const normalized = asString(value).trim().toLowerCase() as Region;
+	return REGIONS.includes(normalized) ? normalized : undefined;
+}
+
 function timestamp(value: unknown): number {
 	if (typeof value === "number") {
 		if (value > 10_000_000_000) return value;
@@ -133,7 +139,10 @@ function totalRounds(match: any): number {
 	if (Array.isArray(match?.rounds) && match.rounds.length) return match.rounds.length;
 	const teams = match?.teams;
 	if (Array.isArray(teams)) {
-		const won = teams.reduce((sum, entry) => sum + asNumber(entry?.rounds_won ?? entry?.roundsWon), 0);
+		const won = teams.reduce(
+			(sum, entry) => sum + asNumber(entry?.rounds_won ?? entry?.roundsWon ?? entry?.rounds?.won),
+			0
+		);
 		if (won > 0) return won;
 	}
 	if (teams && typeof teams === "object") {
@@ -210,12 +219,16 @@ function normalizeMatch(match: any, puuid: string, name: string, tag: string): P
 	}
 
 	const rounds = asNumber(stats?.rounds_played ?? stats?.roundsPlayed, totalRounds(match));
+	const agentId = asString(player?.agent?.id);
+	const agentIcon =
+		asString(player?.assets?.agent?.small ?? player?.assets?.agent?.displayIcon ?? player?.agent?.icon) ||
+		(agentId ? `https://media.valorant-api.com/agents/${encoded(agentId)}/displayicon.png` : undefined);
 	return {
 		id: matchId(match),
 		startedAt: matchStartedAt(match),
 		map: matchMap(match),
 		agent: asString(player?.character ?? player?.agent?.name ?? player?.character_name ?? player?.characterName, "Unknown"),
-		agentIcon: asString(player?.assets?.agent?.small ?? player?.assets?.agent?.displayIcon ?? player?.agent?.icon) || undefined,
+		agentIcon,
 		result,
 		kills: asNumber(stats?.kills),
 		deaths: asNumber(stats?.deaths),
@@ -223,7 +236,14 @@ function normalizeMatch(match: any, puuid: string, name: string, tag: string): P
 		headshots: asNumber(stats?.headshots ?? player?.headshots),
 		bodyshots: asNumber(stats?.bodyshots ?? player?.bodyshots),
 		legshots: asNumber(stats?.legshots ?? player?.legshots),
-		damage: asNumber(player?.damage_made ?? player?.damageMade ?? stats?.damage ?? player?.damage),
+		damage: asNumber(
+			player?.damage_made ??
+				player?.damageMade ??
+				stats?.damage?.dealt ??
+				stats?.damage ??
+				player?.damage?.dealt ??
+				player?.damage
+		),
 		score: asNumber(stats?.score),
 		rounds
 	};
@@ -259,6 +279,28 @@ async function legacyRankIcon(region: Region, name: string, tag: string, apiKey:
 	}
 }
 
+async function resolveRegion(name: string, tag: string, apiKey: string, fallback: Region): Promise<{ region: Region; account?: any }> {
+	const key = `${name.trim().toLowerCase()}#${tag.trim().toLowerCase()}`;
+	const cached = accountRegionCache.get(key);
+	if (cached) return { region: cached };
+
+	try {
+		const body = await requestJson(`/valorant/v2/account/${encoded(name)}/${encoded(tag)}`, apiKey);
+		const account = body?.data ?? {};
+		const detected = normalizeRegion(account?.region);
+		const region = detected ?? fallback;
+		accountRegionCache.set(key, region);
+		return { region, account };
+	} catch (error) {
+		// Region auto detection should not make previously working accounts fail if the account
+		// helper is temporarily unavailable. Fall back to the user's selected shard in that case.
+		if (error instanceof HenrikError && [404, 410, 501].includes(error.status)) {
+			return { region: fallback };
+		}
+		throw error;
+	}
+}
+
 export type HenrikBundle = {
 	account: { puuid: string; name: string; tag: string };
 	rank: { tierId: number; name: string; rr: number; lastChange: number; icon?: string };
@@ -270,14 +312,16 @@ export async function fetchHenrikBundle(settings: AccountSettings): Promise<Henr
 	const riot = parseRiotId(settings.riotId);
 	if (!riot) throw new HenrikError(400, "invalid Riot ID");
 	if (!settings.apiKey) throw new HenrikError(401, "missing API key");
-	const region = settings.region ?? "na";
+	const fallbackRegion = settings.region ?? "na";
+	const resolved = await resolveRegion(riot.name, riot.tag, settings.apiKey, fallbackRegion);
+	const region = resolved.region;
 	const mmr = await requestJson(
 		`/valorant/v3/mmr/${region}/pc/${encoded(riot.name)}/${encoded(riot.tag)}`,
 		settings.apiKey
 	);
-	const account = mmr?.data?.account ?? {};
+	const account = mmr?.data?.account ?? resolved.account ?? {};
 	const current = mmr?.data?.current ?? {};
-	const puuid = asString(account?.puuid);
+	const puuid = asString(account?.puuid ?? resolved.account?.puuid);
 	if (!puuid) throw new HenrikError(502, "MMR response did not contain a PUUID");
 	const rankName = asString(current?.tier?.name, "Unranked");
 
@@ -331,8 +375,8 @@ export async function fetchHenrikBundle(settings: AccountSettings): Promise<Henr
 	return {
 		account: {
 			puuid,
-			name: asString(account?.name, riot.name),
-			tag: asString(account?.tag, riot.tag)
+			name: asString(account?.name ?? resolved.account?.name, riot.name),
+			tag: asString(account?.tag ?? resolved.account?.tag, riot.tag)
 		},
 		rank: {
 			tierId: asNumber(current?.tier?.id),
@@ -346,4 +390,4 @@ export async function fetchHenrikBundle(settings: AccountSettings): Promise<Henr
 	};
 }
 
-export const __test = { normalizeMatch, historyArray, totalRounds };
+export const __test = { normalizeMatch, historyArray, totalRounds, normalizeRegion };
