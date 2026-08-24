@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "slug": "valorant-tracker",
+  "name": "Valorant Tracker",
+  "version": "1.0.0",
+  "product_type": "stream-deck-plugin",
+  "author": "PackRat",
+  "pricing": {
+    "model": "paid",
+    "price_usd": null,
+    "decision_required": true
+  },
+  "short_description": "Turn Stream Deck into a physical VALORANT ranked dashboard for RR, session progress, recent competitive stats, agents, maps and match controls.",
+  "description": "Valorant Tracker puts the ranked information you actually check during a competitive session directly on Stream Deck. See your current rank and RR, track session wins, losses and net RR, review recent performance, expand agent and map stats on larger decks, and keep useful match controls such as a 45 second spike timer under your hand. Account setup is shared across every key, so you enter your Riot ID, region and HenrikDev API key once. The plugin uses one shared cache and refresh service rather than making duplicate requests for every visible key. Bundled dashboards are included for standard Stream Deck, Stream Deck XL and Stream Deck Neo and can be customized after installation.",
+  "highlights": [
+    "Current competitive rank, RR and latest RR movement",
+    "Persistent session RR plus win and loss record",
+    "Recent headshot percentage, damage and ACS",
+    "Top agent K/D and win rate with expandable slots",
+    "Top map win rate with expandable slots",
+    "Recent match views for larger dashboards",
+    "45 second spike timer",
+    "Manual win and loss controls with later API reconciliation",
+    "Hold to reset session protection",
+    "Bundled Standard, XL and Neo dashboard profiles",
+    "One shared account setup for every action",
+    "Five minute shared cache with last known good fallback"
+  ],
+  "requirements": [
+    "Stream Deck 6.9 or newer",
+    "Windows 10 or newer, or macOS 12 or newer",
+    "A Riot ID in Name#TAG format",
+    "A user provided HenrikDev API key",
+    "Internet access for player data"
+  ],
+  "keywords": [
+    "valorant",
+    "rank",
+    "rr",
+    "ranked",
+    "tracker",
+    "stats",
+    "competitive",
+    "session",
+    "gaming"
+  ],
+  "setup_summary": [
+    "Install Valorant Tracker and open any action's Property Inspector",
+    "Enter Riot ID as Name#TAG and choose region",
+    "Open the HenrikDev dashboard, generate an API key and paste it once",
+    "Use the bundled dashboard for your Stream Deck model or arrange individual actions yourself"
+  ],
+  "privacy": "Riot ID, region, HenrikDev API key, session state and cached player data are stored using Stream Deck settings on the user's computer. PackRat does not receive the API key or player data. Requests required for player statistics are sent to HenrikDev.",
+  "third_party": "Requires a user provided HenrikDev API key. HenrikDev is an independent third party community API. Availability, endpoint behavior and rate limits are outside PackRat's control.",
+  "legal": "Not affiliated with, endorsed by, or sponsored by Riot Games or HenrikDev. VALORANT and Riot Games are trademarks or registered trademarks of Riot Games, Inc.",
+  "compatibility": {
+    "windows": "10+",
+    "macos": "12+",
+    "stream_deck": "6.9+",
+    "bundled_profiles": [
+      "Stream Deck 15 key",
+      "Stream Deck XL",
+      "Stream Deck Neo"
+    ]
+  },
+  "gallery_plan": [
+    "Hero: ranked dashboard on Stream Deck hardware",
+    "Feature breakdown: rank, session RR, recent performance and controls",
+    "Standard 15 key dashboard",
+    "XL expanded agent, map and recent match dashboard",
+    "Setup: one shared Riot ID and HenrikDev API key"
+  ],
+  "release_notes": "Initial release of Valorant Tracker with 20 actions, shared HenrikDev account setup, session tracking, recent competitive statistics, manual result controls, a 45 second spike timer and bundled Standard, XL and Neo dashboards.",
+  "submission_state": "not_ready",
+  "remaining_submission_decisions": [
+    "Final marketplace price",
+    "Final deterministic marketplace art",
+    "Live HenrikDev smoke test with a real user key",
+    "Physical Stream Deck package and profile import test"
+  ]
+}
