@@ -62,7 +62,8 @@ async function fetchAssetDataUrl(url: string | undefined): Promise<string | unde
 			if (!response.ok) return undefined;
 			const bytes = Buffer.from(await response.arrayBuffer());
 			if (!bytes.length || bytes.length > 1_000_000) return undefined;
-			const mime = response.headers.get("content-type")?.split(";")[0] || "image/png";
+			const mime = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() || "image/png";
+			if (!new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]).has(mime)) return undefined;
 			return `data:${mime};base64,${bytes.toString("base64")}`;
 		} catch {
 			return undefined;
@@ -290,12 +291,16 @@ export async function fetchHenrikBundle(settings: AccountSettings): Promise<Henr
 	if (historyResult.status === "fulfilled") historyBody = historyResult.value;
 	else if (historyResult.reason instanceof HenrikError && [404, 410, 501].includes(historyResult.reason.status)) {
 		historyBody = await requestJson(`/valorant/v1/mmr-history/${region}/${encoded(riot.name)}/${encoded(riot.tag)}`, settings.apiKey);
+	} else {
+		throw historyResult.reason;
 	}
 
 	let matchesBody: any = null;
 	if (matchesResult.status === "fulfilled") matchesBody = matchesResult.value;
 	else if (matchesResult.reason instanceof HenrikError && [404, 410, 501].includes(matchesResult.reason.status)) {
 		matchesBody = await requestJson(`/valorant/v3/matches/${region}/${encoded(riot.name)}/${encoded(riot.tag)}?mode=competitive&size=10`, settings.apiKey);
+	} else {
+		throw matchesResult.reason;
 	}
 
 	const history: MmrHistoryPoint[] = historyArray(historyBody)
@@ -333,7 +338,7 @@ export async function fetchHenrikBundle(settings: AccountSettings): Promise<Henr
 			tierId: asNumber(current?.tier?.id),
 			name: rankName,
 			rr: asNumber(current?.rr),
-			lastChange: asNumber(current?.last_change),
+			lastChange: asNumber(current?.last_change ?? current?.lastChange),
 			icon: rankIconResult.status === "fulfilled" ? rankIconResult.value : undefined
 		},
 		history,
