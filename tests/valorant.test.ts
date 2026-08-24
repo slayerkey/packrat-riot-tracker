@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { __test, parseRiotId } from "../src/valorant/henrik";
 import type { RuntimeState, TrackerSnapshot } from "../src/valorant/model";
-import { renderMetric, renderTimer } from "../src/valorant/render";
+import { renderControl, renderMetric, renderTimer } from "../src/valorant/render";
 
 function snapshot(overrides: Partial<TrackerSnapshot> = {}): TrackerSnapshot {
 	return {
@@ -165,6 +165,13 @@ test("all important error fixtures have visible key states", () => {
 	for (const [error, expected] of cases) {
 		assert.match(renderMetric("rr", { status: "error", error }, {}, undefined), expected);
 	}
+});
+
+test("long error and control labels use compact key-safe typography", () => {
+	assert.match(renderMetric("rr", { status: "error", error: "no-account" }, {}, undefined), /font-size="19"[^>]*>SET ACCOUNT</);
+	assert.match(renderMetric("rr", { status: "error", error: "api-error" }, {}, undefined), /font-size="23"[^>]*>API ERROR</);
+	assert.match(renderControl("LOG WIN", "TAP AFTER MATCH", "#35d07f"), /font-size="28"[^>]*>LOG WIN</);
+	assert.match(renderControl("LOG LOSS", "TAP AFTER MATCH"), /font-size="23"[^>]*>LOG LOSS</);
 });
 
 test("long player names never get injected into key SVG output", () => {
