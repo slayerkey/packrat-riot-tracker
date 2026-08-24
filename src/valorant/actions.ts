@@ -17,6 +17,20 @@ function keyImage(markup: string): string {
 	return `data:image/svg+xml;base64,${Buffer.from(markup, "utf-8").toString("base64")}`;
 }
 
+/**
+ * A profile can make ten or more metric keys appear in the same instant. Each key still paints
+ * immediately from the shared cache, but their background refresh requests are collapsed into one
+ * call so opening a dashboard does not hammer Stream Deck with a burst of redundant repaints.
+ */
+let appearanceRefreshTimer: NodeJS.Timeout | null = null;
+function scheduleAppearanceRefresh(): void {
+	if (appearanceRefreshTimer) clearTimeout(appearanceRefreshTimer);
+	appearanceRefreshTimer = setTimeout(() => {
+		appearanceRefreshTimer = null;
+		void valorantService.refresh(false);
+	}, 150);
+}
+
 abstract class MetricActionBase extends SingletonAction<ActionSettings> {
 	protected abstract metric: Metric;
 
@@ -28,7 +42,7 @@ abstract class MetricActionBase extends SingletonAction<ActionSettings> {
 	override async onWillAppear(ev: WillAppearEvent<ActionSettings>): Promise<void> {
 		if (!ev.action.isKey()) return;
 		await this.paint(ev.action, ev.payload.settings);
-		void valorantService.refresh(false);
+		scheduleAppearanceRefresh();
 	}
 
 	override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<ActionSettings>): Promise<void> {
