@@ -36,12 +36,14 @@
 			<label for="apiKey">API Key</label>
 			<input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="HenrikDev API key" />
 			<div class="help steps">
-				<strong>Free setup</strong>
-				<span>1. Go to api.henrikdev.xyz/dashboard</span>
+				<strong>API setup</strong>
+				<span>1. Open the HenrikDev dashboard</span>
 				<span>2. Open API Keys and generate a key</span>
 				<span>3. Paste it here</span>
 				<span>If HenrikDev directs your account to Discord, request a Basic key in the get-a-key channel.</span>
 			</div>
+			<button id="openHenrikDashboard" type="button">Open HenrikDev Dashboard</button>
+			<div class="help third-party">HenrikDev is an independent third-party community API. Availability and rate limits are controlled by HenrikDev.</div>
 		</section>
 
 		<section class="card">
@@ -73,7 +75,7 @@
 
 		<section class="privacy">
 			<strong>Privacy</strong>
-			<p>Your Riot ID and HenrikDev key are stored in Stream Deck global settings on this computer. Player requests go to HenrikDev only.</p>
+			<p>Your Riot ID and HenrikDev key are stored in Stream Deck global settings on this computer. Player requests go to HenrikDev only. PackRat does not receive your API key.</p>
 		</section>
 	</main>
 	<script src="pi.js"></script>
