@@ -4,7 +4,7 @@
 	"private": true,
 	"scripts": {
 		"build": "rollup -c",
-		"test": "tsx --test tests/**/*.test.ts",
+		"test": "tsx --test tests/*.test.ts",
 		"watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.packrat.valorant-tracker\""
 	},
 	"type": "module",
