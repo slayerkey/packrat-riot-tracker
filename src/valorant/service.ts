@@ -1,0 +1,275 @@
+import streamDeck from "@elgato/streamdeck";
+import type { JsonObject } from "@elgato/utils";
+
+import { fetchHenrikBundle, HenrikError, parseRiotId, REGIONS } from "./henrik";
+import type {
+	AccountSettings,
+	AggregateItem,
+	ErrorKind,
+	GlobalStore,
+	ManualResult,
+	PlayerMatch,
+	RuntimeState,
+	SessionState,
+	TrackerSnapshot
+} from "./model";
+
+export const REFRESH_MS = 5 * 60_000;
+export const STALE_MS = 15 * 60_000;
+
+function cloneStore(value: GlobalStore | undefined): GlobalStore {
+	return value && typeof value === "object" ? value : {};
+}
+
+function aggregate(matches: PlayerMatch[], key: "agent" | "map"): AggregateItem[] {
+	const groups = new Map<string, { name: string; icon?: string; games: number; wins: number; losses: number; kills: number; deaths: number; damage: number; score: number; rounds: number }>();
+	for (const match of matches) {
+		const name = match[key] || "Unknown";
+		const current = groups.get(name) ?? {
+			name,
+			icon: key === "agent" ? match.agentIcon : undefined,
+			games: 0,
+			wins: 0,
+			losses: 0,
+			kills: 0,
+			deaths: 0,
+			damage: 0,
+			score: 0,
+			rounds: 0
+		};
+		current.games++;
+		if (match.result === "win") current.wins++;
+		if (match.result === "loss") current.losses++;
+		current.kills += match.kills;
+		current.deaths += match.deaths;
+		current.damage += match.damage;
+		current.score += match.score;
+		current.rounds += match.rounds;
+		if (!current.icon && key === "agent" && match.agentIcon) current.icon = match.agentIcon;
+		groups.set(name, current);
+	}
+	return [...groups.values()]
+		.map((group) => ({
+			name: group.name,
+			icon: group.icon,
+			games: group.games,
+			wins: group.wins,
+			losses: group.losses,
+			winRate: group.games ? (group.wins / group.games) * 100 : 0,
+			kills: group.kills,
+			deaths: group.deaths,
+			kd: group.deaths ? group.kills / group.deaths : group.kills,
+			damage: group.damage,
+			acs: group.rounds ? group.score / group.rounds : 0
+		}))
+		.sort((a, b) => b.games - a.games || b.winRate - a.winRate || b.kd - a.kd || a.name.localeCompare(b.name));
+}
+
+function headshotPercent(matches: PlayerMatch[]): number | null {
+	let heads = 0;
+	let shots = 0;
+	for (const match of matches) {
+		heads += match.headshots;
+		shots += match.headshots + match.bodyshots + match.legshots;
+	}
+	return shots ? (heads / shots) * 100 : null;
+}
+
+function overallAcs(matches: PlayerMatch[]): number | null {
+	let score = 0;
+	let rounds = 0;
+	for (const match of matches) {
+		score += match.score;
+		rounds += match.rounds;
+	}
+	return rounds ? score / rounds : null;
+}
+
+function newSession(historyIds: string[]): SessionState {
+	return {
+		startedAt: Date.now(),
+		baselineMatchIds: historyIds.slice(0, 20),
+		manual: []
+	};
+}
+
+function errorKind(error: unknown): { kind: ErrorKind; detail: string } {
+	if (error instanceof HenrikError) {
+		const detail = error.message || `HTTP ${error.status}`;
+		if (error.status === 0) return { kind: "offline", detail };
+		if (error.status === 400) return { kind: "invalid-riot-id", detail };
+		if (error.status === 401) return { kind: "invalid-key", detail };
+		if (error.status === 404) return { kind: "not-found", detail };
+		if (error.status === 429) return { kind: "rate-limited", detail };
+		if (error.status === 403 && /key|auth|token/i.test(detail)) return { kind: "invalid-key", detail };
+		return { kind: "api-error", detail };
+	}
+	return { kind: "api-error", detail: error instanceof Error ? error.message : "unknown error" };
+}
+
+function configured(account: AccountSettings | undefined): { ok: true } | { ok: false; kind: ErrorKind; detail: string } {
+	if (!account?.riotId) return { ok: false, kind: "no-account", detail: "Set Riot ID" };
+	if (!parseRiotId(account.riotId)) return { ok: false, kind: "invalid-riot-id", detail: "Use Name#TAG" };
+	if (!account.apiKey) return { ok: false, kind: "no-api-key", detail: "Add HenrikDev key" };
+	if (account.region && !REGIONS.includes(account.region)) return { ok: false, kind: "invalid-region", detail: "Choose a supported region" };
+	return { ok: true };
+}
+
+class ValorantDataService {
+	private runtime: RuntimeState = { status: "idle", error: "none" };
+	private listeners = new Set<() => void | Promise<void>>();
+	private inFlight: Promise<RuntimeState> | null = null;
+	private initialized = false;
+
+	get state(): RuntimeState {
+		return this.runtime;
+	}
+
+	subscribe(listener: () => void | Promise<void>): () => void {
+		this.listeners.add(listener);
+		return () => this.listeners.delete(listener);
+	}
+
+	private notify(): void {
+		for (const listener of this.listeners) {
+			Promise.resolve(listener()).catch((error) => streamDeck.logger.error("repaint failed", error));
+		}
+	}
+
+	private setRuntime(next: RuntimeState): RuntimeState {
+		this.runtime = next;
+		this.notify();
+		return next;
+	}
+
+	async initialize(): Promise<void> {
+		if (this.initialized) return;
+		this.initialized = true;
+		const store = cloneStore((await streamDeck.settings.getGlobalSettings()) as unknown as GlobalStore);
+		if (store.cache) this.runtime = { status: "ready", error: "none", snapshot: store.cache };
+		streamDeck.settings.onDidReceiveGlobalSettings((ev) => {
+			const nextStore = cloneStore(ev.settings as unknown as GlobalStore);
+			if (nextStore.cache) this.runtime = { status: "ready", error: "none", snapshot: nextStore.cache };
+			this.notify();
+			void this.refresh(true);
+		});
+	}
+
+	async getStore(): Promise<GlobalStore> {
+		return cloneStore((await streamDeck.settings.getGlobalSettings()) as unknown as GlobalStore);
+	}
+
+	private async writeStore(store: GlobalStore): Promise<void> {
+		await streamDeck.settings.setGlobalSettings(store as unknown as JsonObject);
+	}
+
+	async refresh(force = false): Promise<RuntimeState> {
+		if (this.inFlight) return this.inFlight;
+		this.inFlight = this.doRefresh(force).finally(() => {
+			this.inFlight = null;
+		});
+		return this.inFlight;
+	}
+
+	private async doRefresh(force: boolean): Promise<RuntimeState> {
+		const store = await this.getStore();
+		const check = configured(store.account);
+		if (!check.ok) return this.setRuntime({ status: "error", error: check.kind, detail: check.detail, snapshot: store.cache });
+		if (!force && store.cache && Date.now() - store.cache.fetchedAt < REFRESH_MS) {
+			return this.setRuntime({ status: "ready", error: "none", snapshot: store.cache });
+		}
+
+		this.setRuntime({ status: "loading", error: "none", snapshot: store.cache });
+		try {
+			const bundle = await fetchHenrikBundle(store.account!);
+			let session = store.session;
+			if (!session) session = newSession(bundle.history.map((entry) => entry.matchId));
+
+			const baseline = new Set(session.baselineMatchIds);
+			const sessionHistory = bundle.history.filter(
+				(entry) => !baseline.has(entry.matchId) && (!entry.date || entry.date >= session!.startedAt - 3 * 60 * 60_000)
+			);
+			const historyIds = new Set(sessionHistory.map((entry) => entry.matchId));
+			const apiSessionMatches = bundle.matches.filter(
+				(match) => historyIds.has(match.id) || (!baseline.has(match.id) && match.startedAt >= session!.startedAt - 3 * 60 * 60_000)
+			);
+
+			const alreadyReconciled = new Set(session.manual.map((entry) => entry.reconciledMatchId).filter((id): id is string => !!id));
+			const manual: ManualResult[] = session.manual.map((entry) => ({ ...entry }));
+			for (const entry of manual) {
+				if (entry.reconciledMatchId) continue;
+				const candidate = apiSessionMatches.find(
+					(match) =>
+						!alreadyReconciled.has(match.id) &&
+						match.result === entry.result &&
+						match.startedAt >= entry.createdAt - 3 * 60 * 60_000
+				);
+				if (candidate) {
+					entry.reconciledMatchId = candidate.id;
+					alreadyReconciled.add(candidate.id);
+				}
+			}
+			session = { ...session, manual };
+
+			const unreconciled = manual.filter((entry) => !entry.reconciledMatchId);
+			const apiWins = apiSessionMatches.filter((match) => match.result === "win").length;
+			const apiLosses = apiSessionMatches.filter((match) => match.result === "loss").length;
+			const netRr =
+				sessionHistory.reduce((sum, entry) => sum + entry.change, 0) +
+				unreconciled.reduce((sum, entry) => sum + (entry.rr ?? 0), 0);
+			const recentMatches = bundle.matches.slice(0, 10);
+			const snapshot: TrackerSnapshot = {
+				fetchedAt: Date.now(),
+				accountName: bundle.account.name,
+				accountTag: bundle.account.tag,
+				puuid: bundle.account.puuid,
+				rankName: bundle.rank.name,
+				rankTierId: bundle.rank.tierId,
+				rr: bundle.rank.rr,
+				lastChange: bundle.rank.lastChange,
+				lastMatch: recentMatches[0],
+				headshotPercent: headshotPercent(recentMatches),
+				damage: recentMatches[0]?.damage ?? null,
+				acs: overallAcs(recentMatches),
+				agents: aggregate(recentMatches, "agent"),
+				maps: aggregate(recentMatches, "map"),
+				recentMatches,
+				history: bundle.history,
+				session: {
+					wins: apiWins + unreconciled.filter((entry) => entry.result === "win").length,
+					losses: apiLosses + unreconciled.filter((entry) => entry.result === "loss").length,
+					netRr
+				}
+			};
+
+			await this.writeStore({ ...store, session, cache: snapshot });
+			return this.setRuntime({ status: "ready", error: "none", snapshot });
+		} catch (error) {
+			const mapped = errorKind(error);
+			streamDeck.logger.warn(`HenrikDev refresh failed: ${mapped.detail}`);
+			return this.setRuntime({ status: "error", error: mapped.kind, detail: mapped.detail, snapshot: store.cache });
+		}
+	}
+
+	async logResult(result: "win" | "loss", rr?: number): Promise<void> {
+		const store = await this.getStore();
+		const session = store.session ?? newSession(store.cache?.history.map((entry) => entry.matchId) ?? []);
+		const manual: ManualResult = {
+			id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+			result,
+			rr: typeof rr === "number" && Number.isFinite(rr) ? rr : undefined,
+			createdAt: Date.now()
+		};
+		await this.writeStore({ ...store, session: { ...session, manual: [...session.manual, manual].slice(-20) } });
+		await this.refresh(true);
+	}
+
+	async resetSession(): Promise<void> {
+		const store = await this.getStore();
+		const baseline = store.cache?.history.map((entry) => entry.matchId) ?? [];
+		await this.writeStore({ ...store, session: newSession(baseline) });
+		await this.refresh(true);
+	}
+}
+
+export const valorantService = new ValorantDataService();
