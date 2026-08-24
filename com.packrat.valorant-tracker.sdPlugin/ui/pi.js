@@ -4,6 +4,7 @@ let actionUuid = "";
 let localSettings = {};
 let globalSettings = {};
 
+const HENRIK_DASHBOARD_URL = "https://api.henrikdev.xyz/dashboard/";
 const SLOT_ACTIONS = new Set([
 	"com.packrat.valorant-tracker.top-agent",
 	"com.packrat.valorant-tracker.agent-kd",
@@ -58,6 +59,11 @@ function saveGlobal() {
 function saveLocal() {
 	if (websocket?.readyState !== WebSocket.OPEN) return;
 	websocket.send(JSON.stringify({ event: "setSettings", context: uuid, payload: localSettings }));
+}
+
+function openUrl(url) {
+	if (websocket?.readyState !== WebSocket.OPEN) return;
+	websocket.send(JSON.stringify({ event: "openUrl", payload: { url } }));
 }
 
 function account() {
@@ -120,6 +126,9 @@ function build() {
 	});
 	document.getElementById("apiKey")?.addEventListener("change", (event) => {
 		setAccountField("apiKey", event.target.value.trim());
+	});
+	document.getElementById("openHenrikDashboard")?.addEventListener("click", () => {
+		openUrl(HENRIK_DASHBOARD_URL);
 	});
 	document.getElementById("actEndDate")?.addEventListener("change", (event) => {
 		setAccountField("actEndDate", fromLocalDateTime(event.target.value));
