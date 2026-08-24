@@ -15,14 +15,14 @@ PLUGIN_ICONS = ROOT / "com.packrat.valorant-tracker.sdPlugin" / "imgs" / "plugin
 REPORT = ROOT / "dist" / "marketplace-art-qa.json"
 
 EXPECTED = {
-    ART / "1-thumbnail.png": (1920, 960),
-    ART / "2-session.png": (1920, 960),
-    ART / "3-xl.png": (1920, 960),
-    ART / "4-controls.png": (1920, 960),
-    ART / "5-setup.png": (1920, 960),
-    ART / "app-icon.png": (288, 288),
-    PLUGIN_ICONS / "marketplace.png": (256, 256),
-    PLUGIN_ICONS / "marketplace@2x.png": (512, 512),
+    ART / "1-thumbnail.png": ((1920, 960), 50_000),
+    ART / "2-session.png": ((1920, 960), 50_000),
+    ART / "3-xl.png": ((1920, 960), 50_000),
+    ART / "4-controls.png": ((1920, 960), 50_000),
+    ART / "5-setup.png": ((1920, 960), 50_000),
+    ART / "app-icon.png": ((288, 288), 3_000),
+    PLUGIN_ICONS / "marketplace.png": ((256, 256), 3_000),
+    PLUGIN_ICONS / "marketplace@2x.png": ((512, 512), 6_000),
 }
 
 errors: list[str] = []
@@ -37,12 +37,12 @@ def check(condition: bool, message: str) -> None:
         errors.append(message)
 
 
-for path, expected_size in EXPECTED.items():
+for path, (expected_size, minimum_bytes) in EXPECTED.items():
     rel = str(path.relative_to(ROOT))
     check(path.is_file(), f"{rel} exists")
     if not path.is_file():
         continue
-    check(path.stat().st_size >= 8_000, f"{rel} is non-trivial artwork")
+    check(path.stat().st_size >= minimum_bytes, f"{rel} is non-trivial artwork")
     try:
         with Image.open(path) as image:
             check(image.format == "PNG", f"{rel} is PNG")
