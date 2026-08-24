@@ -240,6 +240,7 @@ class ValorantDataService {
 				puuid: bundle.account.puuid,
 				rankName: bundle.rank.name,
 				rankTierId: bundle.rank.tierId,
+				rankIcon: bundle.rank.icon,
 				rr: bundle.rank.rr,
 				lastChange: bundle.rank.lastChange,
 				lastMatch: recentMatches[0],
