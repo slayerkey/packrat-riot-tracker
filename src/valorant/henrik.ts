@@ -1,6 +1,8 @@
 import type { AccountSettings, MmrHistoryPoint, PlayerMatch, Region } from "./model";
 
 const BASE_URL = "https://api.henrikdev.xyz";
+const assetCache = new Map<string, Promise<string | undefined>>();
+const rankIconCache = new Map<string, string | undefined>();
 
 export class HenrikError extends Error {
 	constructor(
@@ -50,6 +52,26 @@ async function requestJson(path: string, apiKey: string): Promise<any> {
 	return body;
 }
 
+async function fetchAssetDataUrl(url: string | undefined): Promise<string | undefined> {
+	if (!url || !/^https:\/\//i.test(url)) return undefined;
+	const existing = assetCache.get(url);
+	if (existing) return existing;
+	const promise = (async () => {
+		try {
+			const response = await fetch(url);
+			if (!response.ok) return undefined;
+			const bytes = Buffer.from(await response.arrayBuffer());
+			if (!bytes.length || bytes.length > 1_000_000) return undefined;
+			const mime = response.headers.get("content-type")?.split(";")[0] || "image/png";
+			return `data:${mime};base64,${bytes.toString("base64")}`;
+		} catch {
+			return undefined;
+		}
+	})();
+	assetCache.set(url, promise);
+	return promise;
+}
+
 function encoded(value: string): string {
 	return encodeURIComponent(value);
 }
@@ -96,6 +118,28 @@ function teamWon(match: any, team: string): boolean | null {
 		}
 	}
 	return null;
+}
+
+function totalRounds(match: any): number {
+	const explicit = asNumber(
+		match?.metadata?.rounds_played ??
+			match?.metadata?.roundsPlayed ??
+			match?.rounds_played ??
+			match?.roundsPlayed,
+		0
+	);
+	if (explicit > 0) return explicit;
+	if (Array.isArray(match?.rounds) && match.rounds.length) return match.rounds.length;
+	const teams = match?.teams;
+	if (Array.isArray(teams)) {
+		const won = teams.reduce((sum, entry) => sum + asNumber(entry?.rounds_won ?? entry?.roundsWon), 0);
+		if (won > 0) return won;
+	}
+	if (teams && typeof teams === "object") {
+		const won = Object.values(teams).reduce<number>((sum, entry: any) => sum + asNumber(entry?.rounds_won ?? entry?.roundsWon), 0);
+		if (won > 0) return won;
+	}
+	return 0;
 }
 
 function playerList(match: any): any[] {
@@ -164,7 +208,7 @@ function normalizeMatch(match: any, puuid: string, name: string, tag: string): P
 		else if (direct.includes("draw")) result = "draw";
 	}
 
-	const rounds = asNumber(match?.metadata?.rounds_played ?? match?.metadata?.roundsPlayed ?? stats?.rounds_played ?? stats?.roundsPlayed, 0);
+	const rounds = asNumber(stats?.rounds_played ?? stats?.roundsPlayed, totalRounds(match));
 	return {
 		id: matchId(match),
 		startedAt: matchStartedAt(match),
@@ -198,9 +242,25 @@ function historyArray(body: any): any[] {
 	return [];
 }
 
+async function legacyRankIcon(region: Region, name: string, tag: string, apiKey: string, rankName: string): Promise<string | undefined> {
+	const cacheKey = rankName.trim().toLowerCase();
+	if (rankIconCache.has(cacheKey)) return rankIconCache.get(cacheKey);
+	try {
+		const body = await requestJson(`/valorant/v2/mmr/${region}/${encoded(name)}/${encoded(tag)}`, apiKey);
+		const current = body?.data?.current_data ?? body?.data?.currentData ?? {};
+		const iconUrl = asString(current?.images?.large ?? current?.images?.small);
+		const dataUrl = await fetchAssetDataUrl(iconUrl);
+		rankIconCache.set(cacheKey, dataUrl);
+		return dataUrl;
+	} catch {
+		rankIconCache.set(cacheKey, undefined);
+		return undefined;
+	}
+}
+
 export type HenrikBundle = {
 	account: { puuid: string; name: string; tag: string };
-	rank: { tierId: number; name: string; rr: number; lastChange: number };
+	rank: { tierId: number; name: string; rr: number; lastChange: number; icon?: string };
 	history: MmrHistoryPoint[];
 	matches: PlayerMatch[];
 };
@@ -218,15 +278,17 @@ export async function fetchHenrikBundle(settings: AccountSettings): Promise<Henr
 	const current = mmr?.data?.current ?? {};
 	const puuid = asString(account?.puuid);
 	if (!puuid) throw new HenrikError(502, "MMR response did not contain a PUUID");
+	const rankName = asString(current?.tier?.name, "Unranked");
 
-	const [historyResult, matchesResult] = await Promise.allSettled([
+	const [historyResult, matchesResult, rankIconResult] = await Promise.allSettled([
 		requestJson(`/valorant/v2/mmr-history/${region}/pc/${encoded(riot.name)}/${encoded(riot.tag)}`, settings.apiKey),
-		requestJson(`/valorant/v4/matches/${region}/pc/${encoded(riot.name)}/${encoded(riot.tag)}?mode=competitive&size=10`, settings.apiKey)
+		requestJson(`/valorant/v4/matches/${region}/pc/${encoded(riot.name)}/${encoded(riot.tag)}?mode=competitive&size=10`, settings.apiKey),
+		legacyRankIcon(region, riot.name, riot.tag, settings.apiKey, rankName)
 	]);
 
 	let historyBody: any = null;
 	if (historyResult.status === "fulfilled") historyBody = historyResult.value;
-	else if (historyResult.reason instanceof HenrikError && historyResult.reason.status === 410) {
+	else if (historyResult.reason instanceof HenrikError && [404, 410, 501].includes(historyResult.reason.status)) {
 		historyBody = await requestJson(`/valorant/v1/mmr-history/${region}/${encoded(riot.name)}/${encoded(riot.tag)}`, settings.apiKey);
 	}
 
@@ -240,18 +302,26 @@ export async function fetchHenrikBundle(settings: AccountSettings): Promise<Henr
 		.map((entry) => ({
 			matchId: asString(entry?.match_id ?? entry?.matchId),
 			date: timestamp(entry?.date ?? entry?.date_raw ?? entry?.dateRaw),
-			rr: asNumber(entry?.rr ?? entry?.ranking_in_tier),
-			change: asNumber(entry?.last_change ?? entry?.mmr_change_to_last_game),
+			rr: asNumber(entry?.rr ?? entry?.ranking_in_tier ?? entry?.rankingInTier),
+			change: asNumber(entry?.last_change ?? entry?.lastChange ?? entry?.mmr_change_to_last_game ?? entry?.mmrChangeToLastGame),
 			map: asString(entry?.map?.name ?? entry?.map) || undefined,
-			tierName: asString(entry?.tier?.name ?? entry?.currenttierpatched) || undefined
+			tierName: asString(entry?.tier?.name ?? entry?.currenttier_patched ?? entry?.currenttierpatched ?? entry?.currentTierPatched) || undefined
 		}))
 		.filter((entry) => !!entry.matchId)
 		.sort((a, b) => b.date - a.date);
 
-	const matches = matchArray(matchesBody)
+	const rawMatches = matchArray(matchesBody)
 		.map((match) => normalizeMatch(match, puuid, riot.name, riot.tag))
 		.filter((match): match is PlayerMatch => !!match)
 		.sort((a, b) => b.startedAt - a.startedAt);
+
+	const matches = await Promise.all(
+		rawMatches.map(async (match) => {
+			if (!match.agentIcon) return match;
+			const dataUrl = await fetchAssetDataUrl(match.agentIcon);
+			return dataUrl ? { ...match, agentIcon: dataUrl } : match;
+		})
+	);
 
 	return {
 		account: {
@@ -261,11 +331,14 @@ export async function fetchHenrikBundle(settings: AccountSettings): Promise<Henr
 		},
 		rank: {
 			tierId: asNumber(current?.tier?.id),
-			name: asString(current?.tier?.name, "Unranked"),
+			name: rankName,
 			rr: asNumber(current?.rr),
-			lastChange: asNumber(current?.last_change)
+			lastChange: asNumber(current?.last_change),
+			icon: rankIconResult.status === "fulfilled" ? rankIconResult.value : undefined
 		},
 		history,
 		matches
 	};
 }
+
+export const __test = { normalizeMatch, historyArray, totalRounds };
