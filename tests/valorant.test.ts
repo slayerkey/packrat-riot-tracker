@@ -60,6 +60,12 @@ test("Riot ID parser accepts Name#TAG and preserves embedded # in the name", () 
 	assert.equal(parseRiotId("#TAG"), null);
 });
 
+test("region normalization accepts Henrik account regions case insensitively", () => {
+	assert.equal(__test.normalizeRegion("EU"), "eu");
+	assert.equal(__test.normalizeRegion("na"), "na");
+	assert.equal(__test.normalizeRegion("unknown"), undefined);
+});
+
 test("legacy Henrik match shape normalizes result, combat stats, damage and rounds", () => {
 	const match = {
 		metadata: { matchid: "fixture-match", map: "Ascent", game_start: 1_700_000_000_000 },
@@ -90,6 +96,48 @@ test("legacy Henrik match shape normalizes result, combat stats, damage and roun
 	assert.equal(normalized.headshots, 21);
 	assert.equal(normalized.damage, 4132);
 	assert.equal(normalized.rounds, 24);
+});
+
+test("Henrik v4 match shape normalizes nested damage, agent art and team result", () => {
+	const match = {
+		metadata: {
+			match_id: "v4-match",
+			map: { name: "Lotus" },
+			started_at: "2026-08-24T20:00:00.000Z"
+		},
+		players: [
+			{
+				puuid: "fixture-puuid",
+				name: "Phoenix",
+				tag: "1337",
+				team_id: "Red",
+				agent: { id: "117ed9e3-49f3-6512-3ccf-0cada7e3823b", name: "Cypher" },
+				stats: {
+					score: 5000,
+					kills: 19,
+					deaths: 15,
+					assists: 8,
+					headshots: 17,
+					bodyshots: 46,
+					legshots: 4,
+					damage: { dealt: 3891, received: 3012 }
+				}
+			}
+		],
+		teams: [
+			{ team_id: "Red", rounds: { won: 13, lost: 9 }, won: true },
+			{ team_id: "Blue", rounds: { won: 9, lost: 13 }, won: false }
+		],
+		rounds: Array.from({ length: 22 }, (_, index) => ({ id: index + 1 }))
+	};
+	const normalized = __test.normalizeMatch(match, "fixture-puuid", "Phoenix", "1337");
+	assert.ok(normalized);
+	assert.equal(normalized.result, "win");
+	assert.equal(normalized.agent, "Cypher");
+	assert.equal(normalized.map, "Lotus");
+	assert.equal(normalized.damage, 3891);
+	assert.equal(normalized.rounds, 22);
+	assert.match(normalized.agentIcon ?? "", /media\.valorant-api\.com\/agents\/117ed9e3-49f3-6512-3ccf-0cada7e3823b\/displayicon\.png/);
 });
 
 test("Henrik history helper accepts array and nested history response shapes", () => {
@@ -172,6 +220,8 @@ test("long error and control labels use compact key-safe typography", () => {
 	assert.match(renderMetric("rr", { status: "error", error: "api-error" }, {}, undefined), /font-size="23"[^>]*>API ERROR</);
 	assert.match(renderControl("LOG WIN", "TAP AFTER MATCH", "#35d07f"), /font-size="28"[^>]*>LOG WIN</);
 	assert.match(renderControl("LOG LOSS", "TAP AFTER MATCH"), /font-size="23"[^>]*>LOG LOSS</);
+	assert.match(renderControl("WIN LOGGED", "SESSION +1", "#35d07f"), /WIN LOGGED/);
+	assert.match(renderControl("KEEP HOLDING", "1.2 SEC TO RESET", "#f0ad4e"), /KEEP HOLDING/);
 });
 
 test("long player names never get injected into key SVG output", () => {
