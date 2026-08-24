@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "name": "Valorant Tracker Standard",
+  "device": "stream-deck-15",
+  "grid": { "columns": 5, "rows": 3 },
+  "plugin_uuid": "com.packrat.valorant-tracker",
+  "keys": [
+    { "row": 0, "column": 0, "action": "com.packrat.valorant-tracker.rank" },
+    { "row": 0, "column": 1, "action": "com.packrat.valorant-tracker.rr" },
+    { "row": 0, "column": 2, "action": "com.packrat.valorant-tracker.session-rr" },
+    { "row": 0, "column": 3, "action": "com.packrat.valorant-tracker.session-record" },
+    { "row": 0, "column": 4, "action": "com.packrat.valorant-tracker.last-match" },
+
+    { "row": 1, "column": 0, "action": "com.packrat.valorant-tracker.headshot" },
+    { "row": 1, "column": 1, "action": "com.packrat.valorant-tracker.top-agent", "settings": { "slot": 1 } },
+    { "row": 1, "column": 2, "action": "com.packrat.valorant-tracker.agent-kd", "settings": { "slot": 1 } },
+    { "row": 1, "column": 3, "action": "com.packrat.valorant-tracker.top-map", "settings": { "slot": 1 } },
+    { "row": 1, "column": 4, "action": "com.packrat.valorant-tracker.damage" },
+
+    { "row": 2, "column": 0, "action": "com.packrat.valorant-tracker.log-win" },
+    { "row": 2, "column": 1, "action": "com.packrat.valorant-tracker.log-loss" },
+    { "row": 2, "column": 2, "action": "com.packrat.valorant-tracker.spike-timer" },
+    { "row": 2, "column": 3, "action": "com.packrat.valorant-tracker.act-countdown" },
+    { "row": 2, "column": 4, "action": "com.packrat.valorant-tracker.session-reset" }
+  ]
+}
