@@ -69,6 +69,7 @@ export type TrackerSnapshot = {
 	puuid: string;
 	rankName: string;
 	rankTierId: number;
+	rankIcon?: string;
 	rr: number;
 	lastChange: number;
 	lastMatch?: PlayerMatch;
