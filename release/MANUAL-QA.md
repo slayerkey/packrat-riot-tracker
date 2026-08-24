@@ -2,6 +2,20 @@
 
 Automated CI must be green before this checklist starts. This checklist only covers boundaries that need a real Stream Deck installation, a real HenrikDev account, or human readability judgement.
 
+## Current observed smoke status
+
+Observed on a real local Stream Deck development installation on 2026-08-24:
+
+* PASS: Valorant Tracker plugin category appears in Stream Deck.
+* PASS: Shared Riot account and HenrikDev settings persist between actions.
+* PASS: Current Rank populates successfully from HenrikDev on a real account.
+* PASS: Current RR populates successfully from HenrikDev on a real account.
+* PASS: Standard, XL and Neo `.streamDeckProfile` archives are present in the plugin source and release candidate.
+* OPEN: Rat Dev linking did not visibly auto-install or switch to a bundled profile. Standard profile import and action resolution still need to be confirmed in current Stream Deck software.
+* OPEN: Remaining actions, session controls, timer behavior, stale-data behavior and physical readability still need spot checking.
+
+No API key is recorded in this checklist or committed to the repository.
+
 ## 1. Install candidate
 
 1. Install the packaged `com.packrat.valorant-tracker.streamDeckPlugin` release candidate.
@@ -25,7 +39,7 @@ For each available device model:
 2. Enter a real Riot ID in `Name#TAG` format.
 3. Choose the correct region.
 4. Press `Open HenrikDev Dashboard` and confirm it opens the HenrikDev dashboard in the default browser.
-5. Generate or retrieve the user's HenrikDev API key.
+5. Generate or retrieve the user's HenrikDev API key from the HenrikDev dashboard.
 6. Paste the API key once.
 7. Select a different Valorant Tracker action and confirm the same Riot ID, region and API key are already available because account setup is global.
 8. Confirm the API key input is masked.
@@ -99,4 +113,4 @@ The product may move from automated QA complete to release ready only after:
 2. At least one real HenrikDev account passes live data smoke testing.
 3. At least the Standard profile imports and resolves correctly on current Stream Deck software.
 4. Any hardware models available for final testing pass readability and interaction checks.
-5. Final marketplace price and deterministic listing art are approved.
+5. Final marketplace price and listing review are approved.
