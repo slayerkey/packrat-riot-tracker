@@ -58,5 +58,6 @@ streamDeck.connect().then(async () => {
 		run: () => valorantService.refresh(false).then(() => undefined),
 		onError: (error) => streamDeck.logger.error("Valorant poll failed", error)
 	});
-	void valorantService.refresh(false);
+	// Visible metric keys schedule one shared refresh after profile appearance. Avoid an eager
+	// startup request here so Stream Deck can finish restoring profiles and plugin settings first.
 });
