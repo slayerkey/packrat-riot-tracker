@@ -56,8 +56,10 @@ abstract class MetricActionBase extends SingletonAction<ActionSettings> {
 	}
 
 	override async onKeyDown(ev: KeyDownEvent<ActionSettings>): Promise<void> {
-		await ev.action.showOk();
-		void valorantService.refresh(true);
+		if (!ev.action.isKey()) return;
+		const settings = this.settingsByAction.get(ev.action as unknown as object) ?? ev.payload.settings ?? {};
+		await ev.action.setImage(keyImage(renderControl("REFRESH", "CHECKING", "#5da9ff")));
+		void valorantService.refresh(true).finally(() => this.paint(ev.action, settings).catch(() => undefined));
 	}
 
 	async paintAll(): Promise<void> {
@@ -68,7 +70,7 @@ abstract class MetricActionBase extends SingletonAction<ActionSettings> {
 		}
 	}
 
-	private async paint(key: KeyAction<ActionSettings>, settings: ActionSettings): Promise<void> {
+	protected async paint(key: KeyAction<ActionSettings>, settings: ActionSettings): Promise<void> {
 		// Act Countdown is the only metric that needs an account setting at paint time. Avoid a
 		// getGlobalSettings IPC round trip for every other visible key on every repaint.
 		const actEndDate = this.metric === "act-countdown" ? (await valorantService.getStore()).account?.actEndDate : undefined;
@@ -149,6 +151,18 @@ export class RecentMatchAction extends MetricActionBase {
 @action({ UUID: "com.packrat.valorant-tracker.act-countdown" })
 export class ActCountdownAction extends MetricActionBase {
 	protected override metric = "act-countdown" as const;
+
+	override async onKeyDown(ev: KeyDownEvent<ActionSettings>): Promise<void> {
+		if (!ev.action.isKey()) return;
+		const store = await valorantService.getStore();
+		if (!store.account?.actEndDate) {
+			await ev.action.setImage(keyImage(renderControl("SET DATE", "IN SETTINGS", "#f0ad4e")));
+			setTimeout(() => void this.paintAll(), 1200);
+			return;
+		}
+		await ev.action.setImage(keyImage(renderControl("ACT DATE", "EDIT SETTINGS", "#f0ad4e")));
+		setTimeout(() => void this.paintAll(), 1200);
+	}
 }
 
 @action({ UUID: "com.packrat.valorant-tracker.refresh" })
@@ -159,19 +173,34 @@ export class RefreshAction extends MetricActionBase {
 abstract class LogResultAction extends SingletonAction<ActionSettings> {
 	protected abstract result: "win" | "loss";
 
+	private defaultImage(): string {
+		return keyImage(
+			renderControl(
+				this.result === "win" ? "LOG WIN" : "LOG LOSS",
+				"TAP AFTER MATCH",
+				this.result === "win" ? "#35d07f" : "#ff4655"
+			)
+		);
+	}
+
+	private async paint(key: KeyAction<ActionSettings>): Promise<void> {
+		await key.setImage(this.defaultImage());
+	}
+
 	override async onWillAppear(ev: WillAppearEvent<ActionSettings>): Promise<void> {
-		if (ev.action.isKey()) {
-			await ev.action.setImage(
-				keyImage(renderControl(this.result === "win" ? "LOG WIN" : "LOG LOSS", "TAP AFTER MATCH", this.result === "win" ? "#35d07f" : "#ff4655"))
-			);
-		}
+		if (ev.action.isKey()) await this.paint(ev.action);
 	}
 
 	override async onKeyDown(ev: KeyDownEvent<ActionSettings>): Promise<void> {
+		if (!ev.action.isKey()) return;
 		const rr = typeof ev.payload.settings.manualRr === "number" ? ev.payload.settings.manualRr : undefined;
 		await valorantService.logResult(this.result, rr);
-		await ev.action.showOk();
+		const title = this.result === "win" ? "WIN LOGGED" : "LOSS LOGGED";
+		const detail = rr === undefined ? "SESSION +1" : `${rr > 0 ? "+" : ""}${Math.round(rr)} RR`;
+		const accent = this.result === "win" ? "#35d07f" : "#ff4655";
+		await ev.action.setImage(keyImage(renderControl(title, detail, accent)));
 		if (rr !== undefined) await ev.action.setSettings({ ...ev.payload.settings, manualRr: undefined });
+		setTimeout(() => void this.paint(ev.action).catch(() => undefined), 1200);
 	}
 }
 
@@ -189,23 +218,32 @@ export class LogLossAction extends LogResultAction {
 export class SessionResetAction extends SingletonAction<ActionSettings> {
 	private downAt = new WeakMap<object, number>();
 
+	private async paintDefault(key: KeyAction<ActionSettings>): Promise<void> {
+		await key.setImage(keyImage(renderControl("HOLD", "RESET SESSION", "#ff4655")));
+	}
+
 	override async onWillAppear(ev: WillAppearEvent<ActionSettings>): Promise<void> {
-		if (ev.action.isKey()) await ev.action.setImage(keyImage(renderControl("HOLD", "RESET SESSION", "#ff4655")));
+		if (ev.action.isKey()) await this.paintDefault(ev.action);
 	}
 
 	override async onKeyDown(ev: KeyDownEvent<ActionSettings>): Promise<void> {
+		if (!ev.action.isKey()) return;
 		this.downAt.set(ev.action as unknown as object, Date.now());
+		await ev.action.setImage(keyImage(renderControl("HOLDING", "1.2 SEC", "#f0ad4e")));
 	}
 
 	override async onKeyUp(ev: KeyUpEvent<ActionSettings>): Promise<void> {
+		if (!ev.action.isKey()) return;
 		const started = this.downAt.get(ev.action as unknown as object) ?? Date.now();
 		this.downAt.delete(ev.action as unknown as object);
 		if (Date.now() - started < 1200) {
-			await ev.action.showAlert();
+			await ev.action.setImage(keyImage(renderControl("KEEP HOLDING", "1.2 SEC TO RESET", "#f0ad4e")));
+			setTimeout(() => void this.paintDefault(ev.action).catch(() => undefined), 1200);
 			return;
 		}
 		await valorantService.resetSession();
-		await ev.action.showOk();
+		await ev.action.setImage(keyImage(renderControl("RESET", "SESSION CLEARED", "#35d07f")));
+		setTimeout(() => void this.paintDefault(ev.action).catch(() => undefined), 1200);
 	}
 }
 
