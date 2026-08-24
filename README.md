@@ -17,8 +17,6 @@ The player data backend is HenrikDev. No Riot Developer Portal key is used by th
 
 The account configuration is stored in Stream Deck **global settings**, so it is entered once and shared by every Valorant Tracker action. A user never needs to paste the HenrikDev key into 15 separate keys.
 
-If HenrikDev directs an account through its Discord setup instead, request a Basic key in its get a key flow and use that key here.
-
 HenrikDev is an independent third party community API. Availability, endpoint behavior and rate limits are controlled by HenrikDev rather than PackRat.
 
 ## Bundled dashboards
@@ -162,6 +160,6 @@ Key implementation files:
 
 The automated release gate builds profiles, validates profile archives, runs fixture and structural QA, renders deterministic visual evidence, builds the plugin, validates through Elgato CLI, packages a release candidate and repeats the important build and validation steps on Windows and macOS.
 
-Physical hardware, a real HenrikDev key, final deterministic marketplace art and the final marketplace price remain release boundaries. The draft PR stays unmerged until those are complete.
+A real local development smoke test has now confirmed that the Valorant Tracker plugin category appears in Stream Deck, shared account settings persist, and Current Rank plus Current RR populate successfully through HenrikDev. The bundled Standard, XL and Neo profile archives are present in the plugin. Remaining manual boundaries are profile import behavior in current Stream Deck software, broader physical readability and interaction spot checks, and final marketplace pricing/submission review.
 
 Not affiliated with, endorsed by, or sponsored by Riot Games or HenrikDev.
