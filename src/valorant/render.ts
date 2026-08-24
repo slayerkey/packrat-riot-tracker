@@ -51,6 +51,11 @@ function sub(value: string, y = 111, color = MUTED, size = 13): string {
 	return `<text x="72" y="${y}" text-anchor="middle" fill="${color}" font-family="Arial,sans-serif" font-size="${size}" font-weight="700">${esc(value)}</text>`;
 }
 
+function artwork(href: string | undefined, x: number, y: number, width: number, height: number): string {
+	if (!href) return "";
+	return `<image href="${esc(href)}" x="${x}" y="${y}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet"/>`;
+}
+
 function shortName(value: string, max = 12): string {
 	const text = value.trim();
 	return text.length <= max ? text : `${text.slice(0, Math.max(1, max - 1))}…`;
@@ -126,14 +131,11 @@ export function renderMetric(metric: Metric, state: RuntimeState, settings: Acti
 	const stale = Date.now() - snapshot.fetchedAt > 15 * 60_000;
 	const staleAccent = stale ? AMBER : RED;
 
-	if (state.status === "error" && stale) {
-		// Keep the last known good information visible, but the amber footer makes staleness obvious.
-	}
-
 	switch (metric) {
 		case "rank": {
 			const color = rankColor(snapshot.rankName);
-			return svg(`${label(shortName(snapshot.rankName, 15).toUpperCase())}${rankMark(snapshot.rankName, color)}${sub(`${snapshot.rr} RR`, 119, WHITE, 16)}`, stale ? AMBER : color);
+			const mark = snapshot.rankIcon ? artwork(snapshot.rankIcon, 42, 32, 60, 64) : rankMark(snapshot.rankName, color);
+			return svg(`${label(shortName(snapshot.rankName, 15).toUpperCase())}${mark}${sub(`${snapshot.rr} RR`, 119, WHITE, 16)}`, stale ? AMBER : color);
 		}
 		case "rr": {
 			const changeColor = snapshot.lastChange > 0 ? GREEN : snapshot.lastChange < 0 ? RED : MUTED;
@@ -161,6 +163,9 @@ export function renderMetric(metric: Metric, state: RuntimeState, settings: Acti
 		case "top-agent": {
 			const item = selected(snapshot.agents, settings);
 			if (!item) return svg(`${label("TOP AGENT")}${main("—", 42)}${sub("NO DATA")}`, staleAccent);
+			if (item.icon) {
+				return svg(`${label(`AGENT #${settings.slot ?? 1}`)}${artwork(item.icon, 48, 30, 48, 50)}${sub(shortName(item.name.toUpperCase(), 11), 96, WHITE, 15)}${sub(`${item.kd.toFixed(2)} KD · ${Math.round(item.winRate)}%`, 116, MUTED, 11)}`, staleAccent);
+			}
 			return svg(`${label(`AGENT #${settings.slot ?? 1}`)}${main(shortName(item.name.toUpperCase(), 10), item.name.length > 8 ? 25 : 31, 73)}${sub(`${item.kd.toFixed(2)} KD · ${Math.round(item.winRate)}% WR`, 105, WHITE, 12)}`, staleAccent);
 		}
 		case "agent-kd": {
