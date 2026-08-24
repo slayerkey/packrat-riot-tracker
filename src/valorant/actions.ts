@@ -12,6 +12,11 @@ import type { ActionSettings } from "./model";
 import { renderControl, renderMetric, renderTimer, type Metric } from "./render";
 import { valorantService } from "./service";
 
+/** Stream Deck setImage silently ignores raw SVG markup. Dynamic faces must be base64 data URIs. */
+function keyImage(markup: string): string {
+	return `data:image/svg+xml;base64,${Buffer.from(markup, "utf-8").toString("base64")}`;
+}
+
 abstract class MetricActionBase extends SingletonAction<ActionSettings> {
 	protected abstract metric: Metric;
 
@@ -44,7 +49,7 @@ abstract class MetricActionBase extends SingletonAction<ActionSettings> {
 
 	private async paint(key: KeyAction<ActionSettings>, settings: ActionSettings): Promise<void> {
 		const store = await valorantService.getStore();
-		await key.setImage(renderMetric(this.metric, valorantService.state, settings ?? {}, store.account?.actEndDate));
+		await key.setImage(keyImage(renderMetric(this.metric, valorantService.state, settings ?? {}, store.account?.actEndDate)));
 	}
 }
 
@@ -132,7 +137,11 @@ abstract class LogResultAction extends SingletonAction<ActionSettings> {
 	protected abstract result: "win" | "loss";
 
 	override async onWillAppear(ev: WillAppearEvent<ActionSettings>): Promise<void> {
-		if (ev.action.isKey()) await ev.action.setImage(renderControl(this.result === "win" ? "LOG WIN" : "LOG LOSS", "TAP AFTER MATCH", this.result === "win" ? "#35d07f" : "#ff4655"));
+		if (ev.action.isKey()) {
+			await ev.action.setImage(
+				keyImage(renderControl(this.result === "win" ? "LOG WIN" : "LOG LOSS", "TAP AFTER MATCH", this.result === "win" ? "#35d07f" : "#ff4655"))
+			);
+		}
 	}
 
 	override async onKeyDown(ev: KeyDownEvent<ActionSettings>): Promise<void> {
@@ -158,7 +167,7 @@ export class SessionResetAction extends SingletonAction<ActionSettings> {
 	private downAt = new WeakMap<object, number>();
 
 	override async onWillAppear(ev: WillAppearEvent<ActionSettings>): Promise<void> {
-		if (ev.action.isKey()) await ev.action.setImage(renderControl("HOLD", "RESET SESSION", "#ff4655"));
+		if (ev.action.isKey()) await ev.action.setImage(keyImage(renderControl("HOLD", "RESET SESSION", "#ff4655")));
 	}
 
 	override async onKeyDown(ev: KeyDownEvent<ActionSettings>): Promise<void> {
@@ -224,6 +233,6 @@ export class SpikeTimerAction extends SingletonAction<ActionSettings> {
 	}
 
 	private async paint(key: KeyAction<ActionSettings>): Promise<void> {
-		await key.setImage(renderTimer(this.remaining()));
+		await key.setImage(keyImage(renderTimer(this.remaining())));
 	}
 }
