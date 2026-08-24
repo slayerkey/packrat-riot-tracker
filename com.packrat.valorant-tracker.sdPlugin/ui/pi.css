@@ -1,0 +1,38 @@
+:root {
+	color-scheme: dark;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	background: #151515;
+	color: #f5f5f5;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: #151515; color: #f5f5f5; }
+main { padding: 12px 10px 22px; }
+.hero { padding: 8px 8px 12px; }
+.eyebrow { color: #ff4655; font-size: 10px; font-weight: 800; letter-spacing: 1.6px; }
+h1 { margin: 3px 0 5px; font-size: 19px; line-height: 1.2; }
+.hero p { margin: 0; color: #aaaab2; font-size: 11px; line-height: 1.45; }
+.card { margin: 9px 0; padding: 12px; border: 1px solid #303037; border-radius: 8px; background: #1d1d21; }
+.card h2 { margin: 0 0 10px; font-size: 12px; letter-spacing: .3px; }
+label { display: block; margin: 9px 0 5px; color: #d8d8dd; font-size: 11px; font-weight: 650; }
+input, select {
+	width: 100%;
+	min-height: 31px;
+	padding: 6px 8px;
+	border: 1px solid #3a3a42;
+	border-radius: 5px;
+	outline: none;
+	background: #101012;
+	color: #fff;
+	font: inherit;
+	font-size: 11px;
+}
+input:focus, select:focus { border-color: #ff4655; box-shadow: 0 0 0 1px #ff465533; }
+.help { margin-top: 5px; color: #92929c; font-size: 10px; line-height: 1.4; }
+.steps { display: grid; gap: 3px; padding-top: 3px; }
+.steps strong { color: #d8d8dd; }
+.optional { color: #81818a; font-weight: 500; }
+.privacy { margin: 13px 4px 0; color: #92929c; font-size: 10px; line-height: 1.45; }
+.privacy strong { color: #c9c9cf; }
+.privacy p { margin: 4px 0 0; }
+.hidden { display: none; }
