@@ -20,7 +20,7 @@
 			<input id="riotId" type="text" autocomplete="off" spellcheck="false" placeholder="Name#TAG" />
 			<div class="help">Include the tag after # exactly as it appears in Valorant.</div>
 
-			<label for="region">Region</label>
+			<label for="region">Region fallback</label>
 			<select id="region">
 				<option value="na">North America (NA)</option>
 				<option value="eu">Europe (EU)</option>
@@ -29,6 +29,7 @@
 				<option value="latam">Latin America (LATAM)</option>
 				<option value="br">Brazil (BR)</option>
 			</select>
+			<div class="help">The plugin normally detects the account region automatically from HenrikDev. This selection is only used as a fallback.</div>
 		</section>
 
 		<section class="card">
@@ -49,7 +50,7 @@
 			<h2>Act Countdown</h2>
 			<label for="actEndDate">Act end date <span class="optional">optional</span></label>
 			<input id="actEndDate" type="datetime-local" />
-			<div class="help">Only used by the Act Countdown key.</div>
+			<div class="help">Only used by the optional Act Countdown action.</div>
 		</section>
 
 		<section id="slotCard" class="card hidden">
