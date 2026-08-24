@@ -51,6 +51,15 @@ function sub(value: string, y = 111, color = MUTED, size = 13): string {
 	return `<text x="72" y="${y}" text-anchor="middle" fill="${color}" font-family="Arial,sans-serif" font-size="${size}" font-weight="700">${esc(value)}</text>`;
 }
 
+function compactTitleSize(value: string): number {
+	const length = value.trim().length;
+	if (length <= 5) return 32;
+	if (length <= 7) return 28;
+	if (length <= 9) return 23;
+	if (length <= 11) return 19;
+	return 17;
+}
+
 function artwork(href: string | undefined, x: number, y: number, width: number, height: number): string {
 	if (!href) return "";
 	return `<image href="${esc(href)}" x="${x}" y="${y}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet"/>`;
@@ -104,7 +113,8 @@ function errorImage(state: RuntimeState): string {
 		"api-error": ["API ERROR", "HenrikDev"]
 	};
 	const [title, detail] = mapping[state.error] ?? ["NO DATA", "Open settings"];
-	return svg(`${label("VALORANT")}${main(title, title.length > 9 ? 22 : 28, 76, state.error === "rate-limited" ? AMBER : RED)}${sub(detail, 105)}`, state.error === "rate-limited" ? AMBER : RED);
+	const accent = state.error === "rate-limited" ? AMBER : RED;
+	return svg(`${label("VALORANT")}${main(title, compactTitleSize(title), 76, accent)}${sub(detail, 105)}`, accent);
 }
 
 function selected<T>(items: T[], settings: ActionSettings): T | undefined {
@@ -203,7 +213,7 @@ export function renderMetric(metric: Metric, state: RuntimeState, settings: Acti
 }
 
 export function renderControl(title: string, detail: string, accent = RED): string {
-	return svg(`${label("VALORANT")}${main(title, title.length > 7 ? 25 : 34, 76)}${sub(detail, 107)}`, accent);
+	return svg(`${label("VALORANT")}${main(title, compactTitleSize(title), 76)}${sub(detail, 107)}`, accent);
 }
 
 export function renderTimer(remainingSeconds: number | null): string {
