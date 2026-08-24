@@ -36,11 +36,14 @@ jobs:
       - name: Run fixture tests
         run: npm test
 
-      - name: Run RatPack structural QA
-        run: python scripts/valorant_qa.py
+      - name: Build bundled dashboard profiles
+        run: python scripts/build_profiles.py
 
       - name: Validate dashboard profile definitions
         run: python scripts/profile_qa.py
+
+      - name: Run RatPack structural QA
+        run: python scripts/valorant_qa.py
 
       - name: Build plugin
         run: npm run build
@@ -51,13 +54,14 @@ jobs:
       - name: Package Stream Deck plugin
         run: npx @elgato/cli pack com.packrat.valorant-tracker.sdPlugin --output dist --no-update-check
 
-      - name: Upload release candidate and QA report
+      - name: Upload release candidate and QA evidence
         uses: actions/upload-artifact@v4
         with:
           name: valorant-tracker-ci
           path: |
             dist/*.streamDeckPlugin
             dist/valorant-qa.json
+            com.packrat.valorant-tracker.sdPlugin/profiles/*.streamDeckProfile
           if-no-files-found: error
 
   platform-smoke:
@@ -78,11 +82,22 @@ jobs:
           node-version: "20"
           cache: npm
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
       - name: Install locked dependencies
         run: npm ci
 
       - name: Run fixture tests
         run: npm test
+
+      - name: Build bundled dashboard profiles
+        run: python scripts/build_profiles.py
+
+      - name: Validate dashboard profiles
+        run: python scripts/profile_qa.py
 
       - name: Build plugin
         run: npm run build
