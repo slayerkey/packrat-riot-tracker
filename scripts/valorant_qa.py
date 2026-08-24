@@ -10,7 +10,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = ROOT / "com.packrat.valorant-tracker.sdPlugin"
 MANIFEST = PLUGIN / "manifest.json"
-PROFILES = [ROOT / "profiles" / "standard.json", ROOT / "profiles" / "xl.json"]
+PROFILES = [
+    ROOT / "profiles" / "standard.json",
+    ROOT / "profiles" / "xl.json",
+    ROOT / "profiles" / "neo.json",
+]
 
 errors: list[str] = []
 checks: list[str] = []
@@ -112,6 +116,8 @@ for path in PROFILES:
         check(len(keys) == 15 and len(positions) == 15, "standard profile definition fills exactly 15 keys")
     if label == "xl":
         check(len(keys) <= 32 and len(positions) == len(keys), "XL profile definition fits 32-key hardware without filler collisions")
+    if label == "neo":
+        check(len(keys) == 8 and len(positions) == 8, "Neo profile definition fills exactly 8 keys")
 
 pi_html = (PLUGIN / "ui" / "config.html").read_text(encoding="utf-8")
 pi_js = (PLUGIN / "ui" / "pi.js").read_text(encoding="utf-8")
@@ -121,8 +127,11 @@ actions_source = (ROOT / "src" / "valorant" / "actions.ts").read_text(encoding="
 plugin_source = (ROOT / "src" / "plugin.ts").read_text(encoding="utf-8")
 
 check("Name#TAG" in pi_html, "Property Inspector documents exact Riot ID format")
-check("api.henrikdev.xyz/dashboard" in pi_html, "Property Inspector documents current HenrikDev dashboard setup")
+check("Open HenrikDev Dashboard" in pi_html, "Property Inspector exposes one-click HenrikDev setup")
+check("independent third-party community API" in pi_html, "Property Inspector discloses HenrikDev third-party dependency")
 check('type="password"' in pi_html, "HenrikDev key uses a password input")
+check("https://api.henrikdev.xyz/dashboard/" in pi_js, "Property Inspector points to the current HenrikDev dashboard")
+check('event: "openUrl"' in pi_js, "Property Inspector opens HenrikDev through Stream Deck openUrl")
 check('event: "setGlobalSettings"' in pi_js, "Property Inspector writes account setup to global settings")
 check('event: "setSettings"' in pi_js, "Property Inspector keeps only action-specific display controls in action settings")
 check("REFRESH_MS = 5 * 60_000" in service, "shared service uses five-minute cache freshness")
