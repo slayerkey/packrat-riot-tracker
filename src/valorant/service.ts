@@ -16,6 +16,7 @@ import type {
 
 export const REFRESH_MS = 5 * 60_000;
 export const STALE_MS = 15 * 60_000;
+const MANUAL_RECONCILE_WINDOW_MS = 3 * 60 * 60_000;
 
 function cloneStore(value: GlobalStore | undefined): GlobalStore {
 	return value && typeof value === "object" ? value : {};
@@ -25,8 +26,7 @@ function accountFingerprint(account: AccountSettings | undefined): string {
 	return JSON.stringify({
 		riotId: account?.riotId?.trim() ?? "",
 		region: account?.region ?? "na",
-		apiKey: account?.apiKey?.trim() ?? "",
-		actEndDate: account?.actEndDate?.trim() ?? ""
+		apiKey: account?.apiKey?.trim() ?? ""
 	});
 }
 
@@ -244,11 +244,11 @@ class ValorantDataService {
 
 			const baseline = new Set(session.baselineMatchIds);
 			const sessionHistory = bundle.history.filter(
-				(entry) => !baseline.has(entry.matchId) && (!entry.date || entry.date >= session!.startedAt - 3 * 60 * 60_000)
+				(entry) => !baseline.has(entry.matchId) && (!entry.date || entry.date >= session!.startedAt - MANUAL_RECONCILE_WINDOW_MS)
 			);
 			const historyIds = new Set(sessionHistory.map((entry) => entry.matchId));
 			const apiSessionMatches = bundle.matches.filter(
-				(match) => historyIds.has(match.id) || (!baseline.has(match.id) && match.startedAt >= session!.startedAt - 3 * 60 * 60_000)
+				(match) => historyIds.has(match.id) || (!baseline.has(match.id) && match.startedAt >= session!.startedAt - MANUAL_RECONCILE_WINDOW_MS)
 			);
 
 			const alreadyReconciled = new Set(session.manual.map((entry) => entry.reconciledMatchId).filter((id): id is string => !!id));
@@ -259,7 +259,8 @@ class ValorantDataService {
 					(match) =>
 						!alreadyReconciled.has(match.id) &&
 						match.result === entry.result &&
-						match.startedAt >= entry.createdAt - 3 * 60 * 60_000
+						match.startedAt >= entry.createdAt - MANUAL_RECONCILE_WINDOW_MS &&
+						match.startedAt <= entry.createdAt + MANUAL_RECONCILE_WINDOW_MS
 				);
 				if (candidate) {
 					entry.reconciledMatchId = candidate.id;
