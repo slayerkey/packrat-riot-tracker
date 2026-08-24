@@ -30,8 +30,11 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install locked dependencies
+      - name: Install locked Node dependencies
         run: npm ci
+
+      - name: Install locked Marketplace art dependencies
+        run: python -m pip install --disable-pip-version-check -r scripts/marketplace-art-requirements.txt
 
       - name: Run fixture tests
         run: npm test
@@ -45,6 +48,12 @@ jobs:
       - name: Validate dashboard profile definitions
         run: python scripts/profile_qa.py
 
+      - name: Build deterministic Marketplace art
+        run: python scripts/build_marketplace_art.py
+
+      - name: Validate Marketplace art
+        run: python scripts/marketplace_art_qa.py
+
       - name: Run RatPack structural QA
         run: python scripts/valorant_qa.py
 
@@ -57,15 +66,23 @@ jobs:
       - name: Package Stream Deck plugin
         run: npx @elgato/cli pack com.packrat.valorant-tracker.sdPlugin --output dist --no-update-check
 
+      - name: Build complete Marketplace release kit
+        run: python scripts/build_release_kit.py
+
       - name: Upload release candidate and QA evidence
         uses: actions/upload-artifact@v4
         with:
-          name: valorant-tracker-ci
+          name: valorant-tracker-release-candidate
           path: |
             dist/*.streamDeckPlugin
+            dist/valorant-tracker-release.zip
             dist/valorant-qa.json
+            dist/marketplace-art-qa.json
             dist/visual-fixtures/*.svg
+            dist/marketplace-art/*.png
             com.packrat.valorant-tracker.sdPlugin/profiles/*.streamDeckProfile
+            marketplace/marketplace.json
+            marketplace/release-notes.md
           if-no-files-found: error
 
   platform-smoke:
