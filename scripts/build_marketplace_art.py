@@ -128,16 +128,15 @@ def make_icon(size: int) -> Image.Image:
     margin = size * 0.15
     draw.rounded_rectangle((margin, margin, size - margin, size - margin), radius=size * 0.18, fill=(18, 18, 24, 255), outline=(*RED, 255), width=max(3, int(size * 0.018)))
     center = size / 2
-    outer = [(center, size * 0.25), (size * 0.70, size * 0.36), (size * 0.64, size * 0.64), (center, size * 0.78), (size * 0.36, size * 0.64), (size * 0.30, size * 0.36)]
-    inner = [(center, size * 0.31), (size * 0.62, size * 0.40), (size * 0.58, size * 0.58), (center, size * 0.69), (size * 0.42, size * 0.58), (size * 0.38, size * 0.40)]
+    outer = [(center, size * 0.23), (size * 0.70, size * 0.35), (size * 0.64, size * 0.64), (center, size * 0.79), (size * 0.36, size * 0.64), (size * 0.30, size * 0.35)]
+    inner = [(center, size * 0.30), (size * 0.62, size * 0.40), (size * 0.58, size * 0.58), (center, size * 0.70), (size * 0.42, size * 0.58), (size * 0.38, size * 0.40)]
     draw.polygon(outer, fill=(*RED, 38), outline=(*RED, 255))
     draw.polygon(inner, fill=(*RED, 210))
-    rr_font = font(int(size * 0.17))
+    rr_font = font(int(size * 0.19))
     rr_box = draw.textbbox((0, 0), "RR", font=rr_font)
-    draw.text((center - (rr_box[2] - rr_box[0]) / 2, size * 0.405), "RR", font=rr_font, fill=(8, 8, 12, 255))
-    tracker_font = font(max(10, int(size * 0.052)))
-    tracker_box = draw.textbbox((0, 0), "TRACKER", font=tracker_font)
-    draw.text((center - (tracker_box[2] - tracker_box[0]) / 2, size * 0.80), "TRACKER", font=tracker_font, fill=MUTED)
+    rr_width = rr_box[2] - rr_box[0]
+    rr_height = rr_box[3] - rr_box[1]
+    draw.text((center - rr_width / 2, center - rr_height / 2 - rr_box[1]), "RR", font=rr_font, fill=(8, 8, 12, 255))
     return canvas
 
 
