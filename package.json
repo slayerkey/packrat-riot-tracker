@@ -5,6 +5,7 @@
 	"scripts": {
 		"build": "rollup -c",
 		"test": "tsx --test tests/valorant.test.ts",
+		"visual:fixtures": "tsx scripts/build_visual_fixtures.ts",
 		"smoke:henrik": "tsx scripts/henrik_smoke.ts",
 		"watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.packrat.valorant-tracker\""
 	},
