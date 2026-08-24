@@ -21,6 +21,15 @@ function cloneStore(value: GlobalStore | undefined): GlobalStore {
 	return value && typeof value === "object" ? value : {};
 }
 
+function accountFingerprint(account: AccountSettings | undefined): string {
+	return JSON.stringify({
+		riotId: account?.riotId?.trim() ?? "",
+		region: account?.region ?? "na",
+		apiKey: account?.apiKey?.trim() ?? "",
+		actEndDate: account?.actEndDate?.trim() ?? ""
+	});
+}
+
 function aggregate(matches: PlayerMatch[], key: "agent" | "map"): AggregateItem[] {
 	const groups = new Map<string, { name: string; icon?: string; games: number; wins: number; losses: number; kills: number; deaths: number; damage: number; score: number; rounds: number }>();
 	for (const match of matches) {
@@ -120,6 +129,7 @@ class ValorantDataService {
 	private listeners = new Set<() => void | Promise<void>>();
 	private inFlight: Promise<RuntimeState> | null = null;
 	private initialized = false;
+	private lastAccountFingerprint = "";
 
 	get state(): RuntimeState {
 		return this.runtime;
@@ -146,12 +156,16 @@ class ValorantDataService {
 		if (this.initialized) return;
 		this.initialized = true;
 		const store = cloneStore((await streamDeck.settings.getGlobalSettings()) as unknown as GlobalStore);
+		this.lastAccountFingerprint = accountFingerprint(store.account);
 		if (store.cache) this.runtime = { status: "ready", error: "none", snapshot: store.cache };
 		streamDeck.settings.onDidReceiveGlobalSettings((ev) => {
 			const nextStore = cloneStore(ev.settings as unknown as GlobalStore);
 			if (nextStore.cache) this.runtime = { status: "ready", error: "none", snapshot: nextStore.cache };
+			const nextFingerprint = accountFingerprint(nextStore.account);
+			const accountChanged = nextFingerprint !== this.lastAccountFingerprint;
+			this.lastAccountFingerprint = nextFingerprint;
 			this.notify();
-			void this.refresh(true);
+			if (accountChanged) void this.refresh(true);
 		});
 	}
 
@@ -160,6 +174,7 @@ class ValorantDataService {
 	}
 
 	private async writeStore(store: GlobalStore): Promise<void> {
+		this.lastAccountFingerprint = accountFingerprint(store.account);
 		await streamDeck.settings.setGlobalSettings(store as unknown as JsonObject);
 	}
 
