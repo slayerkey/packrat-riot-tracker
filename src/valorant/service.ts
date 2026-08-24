@@ -128,6 +128,7 @@ class ValorantDataService {
 	private runtime: RuntimeState = { status: "idle", error: "none" };
 	private listeners = new Set<() => void | Promise<void>>();
 	private inFlight: Promise<RuntimeState> | null = null;
+	private refreshAgain = false;
 	private initialized = false;
 	private lastAccountFingerprint = "";
 
@@ -179,24 +180,46 @@ class ValorantDataService {
 	}
 
 	async refresh(force = false): Promise<RuntimeState> {
-		if (this.inFlight) return this.inFlight;
-		this.inFlight = this.doRefresh(force).finally(() => {
+		if (this.inFlight) {
+			if (force) this.refreshAgain = true;
+			return this.inFlight;
+		}
+
+		const run = this.doRefresh(force);
+		this.inFlight = run;
+		try {
+			return await run;
+		} finally {
 			this.inFlight = null;
-		});
-		return this.inFlight;
+			if (this.refreshAgain) {
+				this.refreshAgain = false;
+				void this.refresh(true);
+			}
+		}
 	}
 
 	private async doRefresh(force: boolean): Promise<RuntimeState> {
-		const store = await this.getStore();
-		const check = configured(store.account);
-		if (!check.ok) return this.setRuntime({ status: "error", error: check.kind, detail: check.detail, snapshot: store.cache });
-		if (!force && store.cache && Date.now() - store.cache.fetchedAt < REFRESH_MS) {
-			return this.setRuntime({ status: "ready", error: "none", snapshot: store.cache });
+		const initialStore = await this.getStore();
+		const check = configured(initialStore.account);
+		if (!check.ok) return this.setRuntime({ status: "error", error: check.kind, detail: check.detail, snapshot: initialStore.cache });
+		if (!force && initialStore.cache && Date.now() - initialStore.cache.fetchedAt < REFRESH_MS) {
+			return this.setRuntime({ status: "ready", error: "none", snapshot: initialStore.cache });
 		}
 
-		this.setRuntime({ status: "loading", error: "none", snapshot: store.cache });
+		const requestedAccount = accountFingerprint(initialStore.account);
+		this.setRuntime({ status: "loading", error: "none", snapshot: initialStore.cache });
 		try {
-			const bundle = await fetchHenrikBundle(store.account!);
+			const bundle = await fetchHenrikBundle(initialStore.account!);
+
+			// Re-read settings after the network request. A manual result, session reset, or account
+			// edit may have happened while HenrikDev was responding. Never overwrite newer local state
+			// with the snapshot captured before the request started.
+			const store = await this.getStore();
+			if (accountFingerprint(store.account) !== requestedAccount) {
+				this.refreshAgain = true;
+				return this.setRuntime({ status: store.cache ? "ready" : "loading", error: "none", snapshot: store.cache });
+			}
+
 			let session = store.session;
 			if (!session) session = newSession(bundle.history.map((entry) => entry.matchId));
 
@@ -263,7 +286,8 @@ class ValorantDataService {
 		} catch (error) {
 			const mapped = errorKind(error);
 			streamDeck.logger.warn(`HenrikDev refresh failed: ${mapped.detail}`);
-			return this.setRuntime({ status: "error", error: mapped.kind, detail: mapped.detail, snapshot: store.cache });
+			const latestStore = await this.getStore();
+			return this.setRuntime({ status: "error", error: mapped.kind, detail: mapped.detail, snapshot: latestStore.cache });
 		}
 	}
 
@@ -276,15 +300,30 @@ class ValorantDataService {
 			rr: typeof rr === "number" && Number.isFinite(rr) ? rr : undefined,
 			createdAt: Date.now()
 		};
-		await this.writeStore({ ...store, session: { ...session, manual: [...session.manual, manual].slice(-20) } });
-		await this.refresh(true);
+		const nextSession = { ...session, manual: [...session.manual, manual].slice(-20) };
+		const nextCache = store.cache
+			? {
+					...store.cache,
+					session: {
+						wins: store.cache.session.wins + (result === "win" ? 1 : 0),
+						losses: store.cache.session.losses + (result === "loss" ? 1 : 0),
+						netRr: store.cache.session.netRr + (manual.rr ?? 0)
+					}
+				}
+			: undefined;
+		await this.writeStore({ ...store, session: nextSession, cache: nextCache });
+		if (nextCache) this.setRuntime({ status: "ready", error: "none", snapshot: nextCache });
+		void this.refresh(true);
 	}
 
 	async resetSession(): Promise<void> {
 		const store = await this.getStore();
 		const baseline = store.cache?.history.map((entry) => entry.matchId) ?? [];
-		await this.writeStore({ ...store, session: newSession(baseline) });
-		await this.refresh(true);
+		const session = newSession(baseline);
+		const nextCache = store.cache ? { ...store.cache, session: { wins: 0, losses: 0, netRr: 0 } } : undefined;
+		await this.writeStore({ ...store, session, cache: nextCache });
+		if (nextCache) this.setRuntime({ status: "ready", error: "none", snapshot: nextCache });
+		void this.refresh(true);
 	}
 }
 
