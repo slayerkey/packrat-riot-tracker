@@ -71,13 +71,22 @@ function account() {
 }
 
 function setAccountField(field, value) {
+	const previous = account();
+	const nextValue = value || undefined;
+	const identityChanged = (field === "riotId" || field === "region") && previous[field] !== nextValue;
 	globalSettings = {
 		...globalSettings,
 		account: {
-			...account(),
-			[field]: value || undefined
+			...previous,
+			[field]: nextValue
 		}
 	};
+	if (identityChanged) {
+		// Session baselines and player cache belong to one Riot account. Never let a previous
+		// player's session flash or get reused after the tracked Riot ID or region changes.
+		delete globalSettings.session;
+		delete globalSettings.cache;
+	}
 	saveGlobal();
 }
 
