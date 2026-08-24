@@ -36,6 +36,9 @@ jobs:
       - name: Run fixture tests
         run: npm test
 
+      - name: Build deterministic visual fixtures
+        run: npm run visual:fixtures
+
       - name: Build bundled dashboard profiles
         run: python scripts/build_profiles.py
 
@@ -61,6 +64,7 @@ jobs:
           path: |
             dist/*.streamDeckPlugin
             dist/valorant-qa.json
+            dist/visual-fixtures/*.svg
             com.packrat.valorant-tracker.sdPlugin/profiles/*.streamDeckProfile
           if-no-files-found: error
 
@@ -92,6 +96,9 @@ jobs:
 
       - name: Run fixture tests
         run: npm test
+
+      - name: Build deterministic visual fixtures
+        run: npm run visual:fixtures
 
       - name: Build bundled dashboard profiles
         run: python scripts/build_profiles.py
