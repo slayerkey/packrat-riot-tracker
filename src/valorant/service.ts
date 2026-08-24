@@ -30,6 +30,15 @@ function accountFingerprint(account: AccountSettings | undefined): string {
 	});
 }
 
+function cacheMatchesAccount(account: AccountSettings | undefined, cache: TrackerSnapshot | undefined): cache is TrackerSnapshot {
+	const riot = parseRiotId(account?.riotId);
+	if (!riot || !cache) return false;
+	return (
+		cache.accountName.trim().toLowerCase() === riot.name.trim().toLowerCase() &&
+		cache.accountTag.trim().toLowerCase() === riot.tag.trim().toLowerCase()
+	);
+}
+
 function aggregate(matches: PlayerMatch[], key: "agent" | "map"): AggregateItem[] {
 	const groups = new Map<string, { name: string; icon?: string; games: number; wins: number; losses: number; kills: number; deaths: number; damage: number; score: number; rounds: number }>();
 	for (const match of matches) {
@@ -158,13 +167,20 @@ class ValorantDataService {
 		this.initialized = true;
 		const store = cloneStore((await streamDeck.settings.getGlobalSettings()) as unknown as GlobalStore);
 		this.lastAccountFingerprint = accountFingerprint(store.account);
-		if (store.cache) this.runtime = { status: "ready", error: "none", snapshot: store.cache };
+		if (cacheMatchesAccount(store.account, store.cache)) {
+			this.runtime = { status: "ready", error: "none", snapshot: store.cache };
+		}
 		streamDeck.settings.onDidReceiveGlobalSettings((ev) => {
 			const nextStore = cloneStore(ev.settings as unknown as GlobalStore);
-			if (nextStore.cache) this.runtime = { status: "ready", error: "none", snapshot: nextStore.cache };
 			const nextFingerprint = accountFingerprint(nextStore.account);
 			const accountChanged = nextFingerprint !== this.lastAccountFingerprint;
 			this.lastAccountFingerprint = nextFingerprint;
+			const cache = cacheMatchesAccount(nextStore.account, nextStore.cache) ? nextStore.cache : undefined;
+			if (accountChanged) {
+				this.runtime = cache ? { status: "ready", error: "none", snapshot: cache } : { status: "loading", error: "none" };
+			} else if (cache) {
+				this.runtime = { status: "ready", error: "none", snapshot: cache };
+			}
 			this.notify();
 			if (accountChanged) void this.refresh(true);
 		});
@@ -200,14 +216,15 @@ class ValorantDataService {
 
 	private async doRefresh(force: boolean): Promise<RuntimeState> {
 		const initialStore = await this.getStore();
+		const initialCache = cacheMatchesAccount(initialStore.account, initialStore.cache) ? initialStore.cache : undefined;
 		const check = configured(initialStore.account);
-		if (!check.ok) return this.setRuntime({ status: "error", error: check.kind, detail: check.detail, snapshot: initialStore.cache });
-		if (!force && initialStore.cache && Date.now() - initialStore.cache.fetchedAt < REFRESH_MS) {
-			return this.setRuntime({ status: "ready", error: "none", snapshot: initialStore.cache });
+		if (!check.ok) return this.setRuntime({ status: "error", error: check.kind, detail: check.detail, snapshot: initialCache });
+		if (!force && initialCache && Date.now() - initialCache.fetchedAt < REFRESH_MS) {
+			return this.setRuntime({ status: "ready", error: "none", snapshot: initialCache });
 		}
 
 		const requestedAccount = accountFingerprint(initialStore.account);
-		this.setRuntime({ status: "loading", error: "none", snapshot: initialStore.cache });
+		this.setRuntime({ status: "loading", error: "none", snapshot: initialCache });
 		try {
 			const bundle = await fetchHenrikBundle(initialStore.account!);
 
@@ -217,10 +234,12 @@ class ValorantDataService {
 			const store = await this.getStore();
 			if (accountFingerprint(store.account) !== requestedAccount) {
 				this.refreshAgain = true;
-				return this.setRuntime({ status: store.cache ? "ready" : "loading", error: "none", snapshot: store.cache });
+				const cache = cacheMatchesAccount(store.account, store.cache) ? store.cache : undefined;
+				return this.setRuntime({ status: cache ? "ready" : "loading", error: "none", snapshot: cache });
 			}
 
-			let session = store.session;
+			const samePlayer = store.cache?.puuid === bundle.account.puuid;
+			let session = samePlayer ? store.session : undefined;
 			if (!session) session = newSession(bundle.history.map((entry) => entry.matchId));
 
 			const baseline = new Set(session.baselineMatchIds);
@@ -287,13 +306,15 @@ class ValorantDataService {
 			const mapped = errorKind(error);
 			streamDeck.logger.warn(`HenrikDev refresh failed: ${mapped.detail}`);
 			const latestStore = await this.getStore();
-			return this.setRuntime({ status: "error", error: mapped.kind, detail: mapped.detail, snapshot: latestStore.cache });
+			const cache = cacheMatchesAccount(latestStore.account, latestStore.cache) ? latestStore.cache : undefined;
+			return this.setRuntime({ status: "error", error: mapped.kind, detail: mapped.detail, snapshot: cache });
 		}
 	}
 
 	async logResult(result: "win" | "loss", rr?: number): Promise<void> {
 		const store = await this.getStore();
-		const session = store.session ?? newSession(store.cache?.history.map((entry) => entry.matchId) ?? []);
+		const cache = cacheMatchesAccount(store.account, store.cache) ? store.cache : undefined;
+		const session = store.session ?? newSession(cache?.history.map((entry) => entry.matchId) ?? []);
 		const manual: ManualResult = {
 			id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
 			result,
@@ -301,13 +322,13 @@ class ValorantDataService {
 			createdAt: Date.now()
 		};
 		const nextSession = { ...session, manual: [...session.manual, manual].slice(-20) };
-		const nextCache = store.cache
+		const nextCache = cache
 			? {
-					...store.cache,
+					...cache,
 					session: {
-						wins: store.cache.session.wins + (result === "win" ? 1 : 0),
-						losses: store.cache.session.losses + (result === "loss" ? 1 : 0),
-						netRr: store.cache.session.netRr + (manual.rr ?? 0)
+						wins: cache.session.wins + (result === "win" ? 1 : 0),
+						losses: cache.session.losses + (result === "loss" ? 1 : 0),
+						netRr: cache.session.netRr + (manual.rr ?? 0)
 					}
 				}
 			: undefined;
@@ -318,9 +339,10 @@ class ValorantDataService {
 
 	async resetSession(): Promise<void> {
 		const store = await this.getStore();
-		const baseline = store.cache?.history.map((entry) => entry.matchId) ?? [];
+		const cache = cacheMatchesAccount(store.account, store.cache) ? store.cache : undefined;
+		const baseline = cache?.history.map((entry) => entry.matchId) ?? [];
 		const session = newSession(baseline);
-		const nextCache = store.cache ? { ...store.cache, session: { wins: 0, losses: 0, netRr: 0 } } : undefined;
+		const nextCache = cache ? { ...cache, session: { wins: 0, losses: 0, netRr: 0 } } : undefined;
 		await this.writeStore({ ...store, session, cache: nextCache });
 		if (nextCache) this.setRuntime({ status: "ready", error: "none", snapshot: nextCache });
 		void this.refresh(true);
