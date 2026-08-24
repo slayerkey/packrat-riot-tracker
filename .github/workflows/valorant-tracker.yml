@@ -39,6 +39,9 @@ jobs:
       - name: Run RatPack structural QA
         run: python scripts/valorant_qa.py
 
+      - name: Validate dashboard profile definitions
+        run: python scripts/profile_qa.py
+
       - name: Build plugin
         run: npm run build
 
