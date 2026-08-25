@@ -16,10 +16,18 @@ export type ManualResult = {
 	reconciledMatchId?: string;
 };
 
+export type AutomaticSessionResult = {
+	matchId: string;
+	startedAt: number;
+	result: "win" | "loss" | "draw" | "unknown";
+	change?: number;
+};
+
 export type SessionState = {
 	startedAt: number;
 	baselineMatchIds: string[];
 	manual: ManualResult[];
+	automatic?: AutomaticSessionResult[];
 };
 
 export type PlayerMatch = {
