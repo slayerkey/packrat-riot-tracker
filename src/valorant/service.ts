@@ -7,15 +7,16 @@ import type {
 	AggregateItem,
 	ErrorKind,
 	GlobalStore,
-	ManualResult,
 	PlayerMatch,
+	Region,
 	RuntimeState,
 	TrackerSnapshot
 } from "./model";
-import { knownMatchIds, newSession, newSessionFromBaseline, reconcileSession } from "./session";
+import { appendManualResult, knownMatchIds, newSession, newSessionFromBaseline, reconcileSession } from "./session";
 
 export const REFRESH_MS = 5 * 60_000;
 export const STALE_MS = 15 * 60_000;
+export type AccountField = "riotId" | "region" | "apiKey" | "actEndDate";
 
 function cloneStore(value: GlobalStore | undefined): GlobalStore {
 	return value && typeof value === "object" ? { ...value } : {};
@@ -110,7 +111,7 @@ function overallAcs(matches: PlayerMatch[]): number | null {
 function errorKind(error: unknown): { kind: ErrorKind; detail: string } {
 	if (error instanceof HenrikError) {
 		const detail = error.message || `HTTP ${error.status}`;
-		if (error.status === 0) return { kind: "offline", detail };
+		if (error.status === 0 || error.status === 408) return { kind: "offline", detail };
 		if (error.status === 400) return { kind: "invalid-riot-id", detail };
 		if (error.status === 401) return { kind: "invalid-key", detail };
 		if (error.status === 404) return { kind: "not-found", detail };
@@ -127,6 +128,17 @@ function configured(account: AccountSettings | undefined): { ok: true } | { ok: 
 	if (!account.apiKey) return { ok: false, kind: "no-api-key", detail: "Add HenrikDev key" };
 	if (account.region && !REGIONS.includes(account.region)) return { ok: false, kind: "invalid-region", detail: "Choose a supported region" };
 	return { ok: true };
+}
+
+function normalizeAccountValue(field: AccountField, value: unknown): string | Region | undefined {
+	if (typeof value !== "string") return undefined;
+	const trimmed = value.trim();
+	if (!trimmed) return undefined;
+	if (field === "region") {
+		const region = trimmed.toLowerCase() as Region;
+		return REGIONS.includes(region) ? region : undefined;
+	}
+	return trimmed;
 }
 
 class ValorantDataService {
@@ -182,9 +194,9 @@ class ValorantDataService {
 			const nextStore = cloneStore(ev.settings as unknown as GlobalStore);
 			const nextRevision = storeRevision(nextStore);
 
-			// setGlobalSettings notifications can arrive after a newer local write. Never let an
-			// older notification repaint the deck with stale session counts or undo a reset.
-			if (nextRevision < this.lastRevision) return;
+			// The plugin is the sole global-settings writer. Its in-memory copy is updated before
+			// every IPC write, so an echo at the same or an older revision is redundant and ignored.
+			if (nextRevision <= this.lastRevision) return;
 
 			const nextFingerprint = accountFingerprint(nextStore.account);
 			const accountChanged = nextFingerprint !== this.lastAccountFingerprint;
@@ -211,13 +223,49 @@ class ValorantDataService {
 		const revision = Math.max(this.lastRevision, storeRevision(store)) + 1;
 		const nextStore = { ...store, revision };
 
-		// Update memory before the IPC write. Every rapid key press now observes the previous press,
-		// even if Stream Deck has not echoed the global settings event back yet.
+		// Update memory before the IPC write. Rapid controls and network commits always observe the
+		// newest state even if Stream Deck has not echoed the write back yet.
 		this.store = nextStore;
 		this.lastRevision = revision;
 		this.lastAccountFingerprint = accountFingerprint(nextStore.account);
 		await streamDeck.settings.setGlobalSettings(nextStore as unknown as JsonObject);
 		return nextStore;
+	}
+
+	async updateAccountField(field: AccountField, value: unknown): Promise<void> {
+		const shouldRefresh = await this.enqueueMutation(async () => {
+			const store = await this.getStore();
+			const current = store.account ?? {};
+			const nextValue = normalizeAccountValue(field, value);
+			if (current[field] === nextValue) return false;
+
+			const account = { ...current } as AccountSettings & Record<string, unknown>;
+			if (nextValue === undefined) delete account[field];
+			else account[field] = nextValue;
+
+			const identityChanged = (field === "riotId" || field === "region") && current[field] !== nextValue;
+			const nextStore: GlobalStore = { ...store, account };
+			if (identityChanged) {
+				delete nextStore.session;
+				delete nextStore.cache;
+			}
+			await this.writeStore(nextStore);
+
+			const check = configured(account);
+			const cache = cacheMatchesAccount(account, nextStore.cache) ? nextStore.cache : undefined;
+			if (!check.ok) {
+				this.setRuntime({ status: "error", error: check.kind, detail: check.detail, snapshot: cache });
+			} else if (field === "actEndDate") {
+				this.notify();
+			} else if (cache && !identityChanged) {
+				this.setRuntime({ status: "ready", error: "none", snapshot: cache });
+			} else {
+				this.setRuntime({ status: "loading", error: "none", snapshot: cache });
+			}
+			return check.ok && field !== "actEndDate";
+		});
+
+		if (shouldRefresh) void this.refresh(true);
 	}
 
 	async refresh(force = false): Promise<RuntimeState> {
@@ -253,9 +301,8 @@ class ValorantDataService {
 		try {
 			const bundle = await fetchHenrikBundle(initialStore.account!);
 
-			// Network fetches run outside the mutation queue, but their commit is serialized with
-			// manual Win/Loss and Reset writes. A request that started before a reset can therefore
-			// never write an older session snapshot after that reset.
+			// Fetch outside the queue, commit inside it. A request that started before a reset,
+			// account edit, or manual result can never overwrite that newer mutation afterward.
 			return await this.enqueueMutation(async () => {
 				const store = await this.getStore();
 				if (accountFingerprint(store.account) !== requestedAccount) {
@@ -318,24 +365,18 @@ class ValorantDataService {
 			const store = await this.getStore();
 			const cache = cacheMatchesAccount(store.account, store.cache) ? store.cache : undefined;
 			const session = store.session ?? newSession(cache);
-			const manual: ManualResult = {
-				id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-				result,
-				rr: typeof rr === "number" && Number.isFinite(rr) ? rr : undefined,
-				createdAt: Date.now(),
-				knownMatchIds: knownMatchIds(cache)
-			};
-			const nextSession = { ...session, manual: [...session.manual, manual].slice(-20) };
-			const nextCache = cache
-				? {
-						...cache,
-						session: {
-							wins: cache.session.wins + (result === "win" ? 1 : 0),
-							losses: cache.session.losses + (result === "loss" ? 1 : 0),
-							netRr: cache.session.netRr + (manual.rr ?? 0)
-						}
-					}
-				: undefined;
+			let nextSession = appendManualResult(session, result, knownMatchIds(cache), rr);
+			let nextCache = cache;
+
+			if (cache) {
+				const view = reconcileSession(nextSession, cache.history, cache.recentMatches);
+				nextSession = view.session;
+				nextCache = {
+					...cache,
+					session: { wins: view.wins, losses: view.losses, netRr: view.netRr }
+				};
+			}
+
 			await this.writeStore({ ...store, session: nextSession, cache: nextCache });
 			if (nextCache) this.setRuntime({ status: "ready", error: "none", snapshot: nextCache });
 		});
