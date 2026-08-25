@@ -10,13 +10,12 @@ import type {
 	ManualResult,
 	PlayerMatch,
 	RuntimeState,
-	SessionState,
 	TrackerSnapshot
 } from "./model";
+import { knownMatchIds, newSession, newSessionFromBaseline, reconcileSession } from "./session";
 
 export const REFRESH_MS = 5 * 60_000;
 export const STALE_MS = 15 * 60_000;
-const MANUAL_RECONCILE_WINDOW_MS = 3 * 60 * 60_000;
 
 function cloneStore(value: GlobalStore | undefined): GlobalStore {
 	return value && typeof value === "object" ? value : {};
@@ -103,14 +102,6 @@ function overallAcs(matches: PlayerMatch[]): number | null {
 	return rounds ? score / rounds : null;
 }
 
-function newSession(historyIds: string[]): SessionState {
-	return {
-		startedAt: Date.now(),
-		baselineMatchIds: historyIds.slice(0, 20),
-		manual: []
-	};
-}
-
 function errorKind(error: unknown): { kind: ErrorKind; detail: string } {
 	if (error instanceof HenrikError) {
 		const detail = error.message || `HTTP ${error.status}`;
@@ -140,6 +131,7 @@ class ValorantDataService {
 	private refreshAgain = false;
 	private initialized = false;
 	private lastAccountFingerprint = "";
+	private mutationQueue: Promise<void> = Promise.resolve();
 
 	get state(): RuntimeState {
 		return this.runtime;
@@ -160,6 +152,12 @@ class ValorantDataService {
 		this.runtime = next;
 		this.notify();
 		return next;
+	}
+
+	private enqueueMutation(task: () => Promise<void>): Promise<void> {
+		const run = this.mutationQueue.then(() => task(), () => task());
+		this.mutationQueue = run.catch(() => undefined);
+		return run;
 	}
 
 	async initialize(): Promise<void> {
@@ -240,41 +238,15 @@ class ValorantDataService {
 
 			const samePlayer = store.cache?.puuid === bundle.account.puuid;
 			let session = samePlayer ? store.session : undefined;
-			if (!session) session = newSession(bundle.history.map((entry) => entry.matchId));
-
-			const baseline = new Set(session.baselineMatchIds);
-			const sessionHistory = bundle.history.filter(
-				(entry) => !baseline.has(entry.matchId) && (!entry.date || entry.date >= session!.startedAt - MANUAL_RECONCILE_WINDOW_MS)
-			);
-			const historyIds = new Set(sessionHistory.map((entry) => entry.matchId));
-			const apiSessionMatches = bundle.matches.filter(
-				(match) => historyIds.has(match.id) || (!baseline.has(match.id) && match.startedAt >= session!.startedAt - MANUAL_RECONCILE_WINDOW_MS)
-			);
-
-			const alreadyReconciled = new Set(session.manual.map((entry) => entry.reconciledMatchId).filter((id): id is string => !!id));
-			const manual: ManualResult[] = session.manual.map((entry) => ({ ...entry }));
-			for (const entry of manual) {
-				if (entry.reconciledMatchId) continue;
-				const candidate = apiSessionMatches.find(
-					(match) =>
-						!alreadyReconciled.has(match.id) &&
-						match.result === entry.result &&
-						match.startedAt >= entry.createdAt - MANUAL_RECONCILE_WINDOW_MS &&
-						match.startedAt <= entry.createdAt + MANUAL_RECONCILE_WINDOW_MS
-				);
-				if (candidate) {
-					entry.reconciledMatchId = candidate.id;
-					alreadyReconciled.add(candidate.id);
-				}
+			if (!session) {
+				session = newSessionFromBaseline([
+					...bundle.history.map((entry) => entry.matchId),
+					...bundle.matches.map((match) => match.id)
+				]);
 			}
-			session = { ...session, manual };
 
-			const unreconciled = manual.filter((entry) => !entry.reconciledMatchId);
-			const apiWins = apiSessionMatches.filter((match) => match.result === "win").length;
-			const apiLosses = apiSessionMatches.filter((match) => match.result === "loss").length;
-			const netRr =
-				sessionHistory.reduce((sum, entry) => sum + entry.change, 0) +
-				unreconciled.reduce((sum, entry) => sum + (entry.rr ?? 0), 0);
+			const sessionView = reconcileSession(session, bundle.history, bundle.matches);
+			session = sessionView.session;
 			const recentMatches = bundle.matches.slice(0, 10);
 			const snapshot: TrackerSnapshot = {
 				fetchedAt: Date.now(),
@@ -295,9 +267,9 @@ class ValorantDataService {
 				recentMatches,
 				history: bundle.history,
 				session: {
-					wins: apiWins + unreconciled.filter((entry) => entry.result === "win").length,
-					losses: apiLosses + unreconciled.filter((entry) => entry.result === "loss").length,
-					netRr
+					wins: sessionView.wins,
+					losses: sessionView.losses,
+					netRr: sessionView.netRr
 				}
 			};
 
@@ -313,40 +285,42 @@ class ValorantDataService {
 	}
 
 	async logResult(result: "win" | "loss", rr?: number): Promise<void> {
-		const store = await this.getStore();
-		const cache = cacheMatchesAccount(store.account, store.cache) ? store.cache : undefined;
-		const session = store.session ?? newSession(cache?.history.map((entry) => entry.matchId) ?? []);
-		const manual: ManualResult = {
-			id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-			result,
-			rr: typeof rr === "number" && Number.isFinite(rr) ? rr : undefined,
-			createdAt: Date.now()
-		};
-		const nextSession = { ...session, manual: [...session.manual, manual].slice(-20) };
-		const nextCache = cache
-			? {
-					...cache,
-					session: {
-						wins: cache.session.wins + (result === "win" ? 1 : 0),
-						losses: cache.session.losses + (result === "loss" ? 1 : 0),
-						netRr: cache.session.netRr + (manual.rr ?? 0)
+		return this.enqueueMutation(async () => {
+			const store = await this.getStore();
+			const cache = cacheMatchesAccount(store.account, store.cache) ? store.cache : undefined;
+			const session = store.session ?? newSession(cache);
+			const manual: ManualResult = {
+				id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+				result,
+				rr: typeof rr === "number" && Number.isFinite(rr) ? rr : undefined,
+				createdAt: Date.now(),
+				knownMatchIds: knownMatchIds(cache)
+			};
+			const nextSession = { ...session, manual: [...session.manual, manual].slice(-20) };
+			const nextCache = cache
+				? {
+						...cache,
+						session: {
+							wins: cache.session.wins + (result === "win" ? 1 : 0),
+							losses: cache.session.losses + (result === "loss" ? 1 : 0),
+							netRr: cache.session.netRr + (manual.rr ?? 0)
+						}
 					}
-				}
-			: undefined;
-		await this.writeStore({ ...store, session: nextSession, cache: nextCache });
-		if (nextCache) this.setRuntime({ status: "ready", error: "none", snapshot: nextCache });
-		void this.refresh(true);
+				: undefined;
+			await this.writeStore({ ...store, session: nextSession, cache: nextCache });
+			if (nextCache) this.setRuntime({ status: "ready", error: "none", snapshot: nextCache });
+		});
 	}
 
 	async resetSession(): Promise<void> {
-		const store = await this.getStore();
-		const cache = cacheMatchesAccount(store.account, store.cache) ? store.cache : undefined;
-		const baseline = cache?.history.map((entry) => entry.matchId) ?? [];
-		const session = newSession(baseline);
-		const nextCache = cache ? { ...cache, session: { wins: 0, losses: 0, netRr: 0 } } : undefined;
-		await this.writeStore({ ...store, session, cache: nextCache });
-		if (nextCache) this.setRuntime({ status: "ready", error: "none", snapshot: nextCache });
-		void this.refresh(true);
+		return this.enqueueMutation(async () => {
+			const store = await this.getStore();
+			const cache = cacheMatchesAccount(store.account, store.cache) ? store.cache : undefined;
+			const session = newSession(cache);
+			const nextCache = cache ? { ...cache, session: { wins: 0, losses: 0, netRr: 0 } } : undefined;
+			await this.writeStore({ ...store, session, cache: nextCache });
+			if (nextCache) this.setRuntime({ status: "ready", error: "none", snapshot: nextCache });
+		});
 	}
 }
 
