@@ -51,20 +51,21 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
 	};
 }
 
-function nextRevision() {
-	const current = Number(globalSettings.revision ?? 0);
-	return (Number.isFinite(current) && current > 0 ? Math.floor(current) : 0) + 1;
-}
-
-function saveGlobal() {
-	if (websocket?.readyState !== WebSocket.OPEN) return;
-	globalSettings = { ...globalSettings, revision: nextRevision() };
-	websocket.send(JSON.stringify({ event: "setGlobalSettings", context: uuid, payload: globalSettings }));
-}
-
 function saveLocal() {
 	if (websocket?.readyState !== WebSocket.OPEN) return;
 	websocket.send(JSON.stringify({ event: "setSettings", context: uuid, payload: localSettings }));
+}
+
+function sendAccountUpdate(field, value) {
+	if (websocket?.readyState !== WebSocket.OPEN || !actionUuid) return;
+	websocket.send(
+		JSON.stringify({
+			event: "sendToPlugin",
+			action: actionUuid,
+			context: uuid,
+			payload: { type: "account-update", field, value }
+		})
+	);
 }
 
 function openUrl(url) {
@@ -79,19 +80,15 @@ function account() {
 function setAccountField(field, value) {
 	const previous = account();
 	const nextValue = value || undefined;
-	const identityChanged = (field === "riotId" || field === "region") && previous[field] !== nextValue;
-	globalSettings = {
-		...globalSettings,
-		account: {
-			...previous,
-			[field]: nextValue
-		}
-	};
-	if (identityChanged) {
-		delete globalSettings.session;
-		delete globalSettings.cache;
-	}
-	saveGlobal();
+
+	// Optimistically update only the PI's display copy. The complete persisted store is owned by
+	// the plugin process; sending a field patch prevents a stale PI from replacing session/cache.
+	const nextAccount = { ...previous };
+	if (nextValue === undefined) delete nextAccount[field];
+	else nextAccount[field] = nextValue;
+	globalSettings = { ...globalSettings, account: nextAccount };
+	render();
+	sendAccountUpdate(field, nextValue);
 }
 
 function toLocalDateTime(value) {
