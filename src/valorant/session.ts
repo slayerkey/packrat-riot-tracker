@@ -2,25 +2,33 @@ import type { ManualResult, MmrHistoryPoint, PlayerMatch, SessionState, TrackerS
 
 export const MANUAL_RECONCILE_WINDOW_MS = 3 * 60 * 60_000;
 
+export function uniqueMatchIds(ids: Array<string | undefined>): string[] {
+	const unique = new Set<string>();
+	for (const id of ids) {
+		if (id) unique.add(id);
+	}
+	return [...unique].slice(0, 40);
+}
+
 export function knownMatchIds(cache: TrackerSnapshot | undefined): string[] {
 	if (!cache) return [];
-	const ids = new Set<string>();
-	for (const entry of cache.history) {
-		if (entry.matchId) ids.add(entry.matchId);
-	}
-	for (const match of cache.recentMatches) {
-		if (match.id) ids.add(match.id);
-	}
-	if (cache.lastMatch?.id) ids.add(cache.lastMatch.id);
-	return [...ids].slice(0, 40);
+	return uniqueMatchIds([
+		...cache.history.map((entry) => entry.matchId),
+		...cache.recentMatches.map((match) => match.id),
+		cache.lastMatch?.id
+	]);
+}
+
+export function newSessionFromBaseline(baselineMatchIds: string[], now = Date.now()): SessionState {
+	return {
+		startedAt: now,
+		baselineMatchIds: uniqueMatchIds(baselineMatchIds),
+		manual: []
+	};
 }
 
 export function newSession(cache: TrackerSnapshot | undefined, now = Date.now()): SessionState {
-	return {
-		startedAt: now,
-		baselineMatchIds: knownMatchIds(cache),
-		manual: []
-	};
+	return newSessionFromBaseline(knownMatchIds(cache), now);
 }
 
 export function reconcileSession(
