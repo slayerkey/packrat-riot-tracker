@@ -108,6 +108,7 @@ export type RuntimeState = {
 };
 
 export type GlobalStore = {
+	revision?: number;
 	account?: AccountSettings;
 	session?: SessionState;
 	cache?: TrackerSnapshot;
