@@ -3,7 +3,6 @@ import {
 	type DidReceiveSettingsEvent,
 	type KeyAction,
 	type KeyDownEvent,
-	type KeyUpEvent,
 	SingletonAction,
 	type WillAppearEvent
 } from "@elgato/streamdeck";
@@ -71,8 +70,6 @@ abstract class MetricActionBase extends SingletonAction<ActionSettings> {
 	}
 
 	protected async paint(key: KeyAction<ActionSettings>, settings: ActionSettings): Promise<void> {
-		// Act Countdown is the only metric that needs an account setting at paint time. Avoid a
-		// getGlobalSettings IPC round trip for every other visible key on every repaint.
 		const actEndDate = this.metric === "act-countdown" ? (await valorantService.getStore()).account?.actEndDate : undefined;
 		await key.setImage(keyImage(renderMetric(this.metric, valorantService.state, settings ?? {}, actEndDate)));
 	}
@@ -216,10 +213,10 @@ export class LogLossAction extends LogResultAction {
 
 @action({ UUID: "com.packrat.valorant-tracker.session-reset" })
 export class SessionResetAction extends SingletonAction<ActionSettings> {
-	private downAt = new WeakMap<object, number>();
+	private armedUntil = new WeakMap<object, number>();
 
 	private async paintDefault(key: KeyAction<ActionSettings>): Promise<void> {
-		await key.setImage(keyImage(renderControl("HOLD", "RESET SESSION", "#ff4655")));
+		await key.setImage(keyImage(renderControl("RESET", "TAP TWICE", "#ff4655")));
 	}
 
 	override async onWillAppear(ev: WillAppearEvent<ActionSettings>): Promise<void> {
@@ -228,22 +225,26 @@ export class SessionResetAction extends SingletonAction<ActionSettings> {
 
 	override async onKeyDown(ev: KeyDownEvent<ActionSettings>): Promise<void> {
 		if (!ev.action.isKey()) return;
-		this.downAt.set(ev.action as unknown as object, Date.now());
-		await ev.action.setImage(keyImage(renderControl("HOLDING", "1.2 SEC", "#f0ad4e")));
-	}
+		const key = ev.action as unknown as object;
+		const now = Date.now();
+		const until = this.armedUntil.get(key) ?? 0;
 
-	override async onKeyUp(ev: KeyUpEvent<ActionSettings>): Promise<void> {
-		if (!ev.action.isKey()) return;
-		const started = this.downAt.get(ev.action as unknown as object) ?? Date.now();
-		this.downAt.delete(ev.action as unknown as object);
-		if (Date.now() - started < 1200) {
-			await ev.action.setImage(keyImage(renderControl("KEEP HOLDING", "1.2 SEC TO RESET", "#f0ad4e")));
+		if (now <= until) {
+			this.armedUntil.delete(key);
+			await valorantService.resetSession();
+			await ev.action.setImage(keyImage(renderControl("RESET", "SESSION CLEARED", "#35d07f")));
 			setTimeout(() => void this.paintDefault(ev.action).catch(() => undefined), 1200);
 			return;
 		}
-		await valorantService.resetSession();
-		await ev.action.setImage(keyImage(renderControl("RESET", "SESSION CLEARED", "#35d07f")));
-		setTimeout(() => void this.paintDefault(ev.action).catch(() => undefined), 1200);
+
+		const armedUntil = now + 2500;
+		this.armedUntil.set(key, armedUntil);
+		await ev.action.setImage(keyImage(renderControl("TAP AGAIN", "RESET SESSION", "#f0ad4e")));
+		setTimeout(() => {
+			if ((this.armedUntil.get(key) ?? 0) !== armedUntil) return;
+			this.armedUntil.delete(key);
+			void this.paintDefault(ev.action).catch(() => undefined);
+		}, 2500);
 	}
 }
 
