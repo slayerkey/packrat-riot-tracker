@@ -56,6 +56,7 @@ test("session reset baselines every match already visible in cache", () => {
 	assert.deepEqual(new Set(knownMatchIds(snapshot)), new Set(["history-and-recent", "recent-only"]));
 	const session = newSession(snapshot, now);
 	assert.deepEqual(new Set(session.baselineMatchIds), new Set(["history-and-recent", "recent-only"]));
+	assert.deepEqual(session.automatic, []);
 });
 
 test("matches from before a reset never rebound into the new session", () => {
@@ -129,6 +130,39 @@ test("repeated API snapshots are idempotent", () => {
 	);
 });
 
+test("automatic result remains counted after it rolls out of the current API window", () => {
+	const now = 1_800_000_000_000;
+	const oldWin = match("old-api-win", now + 1_000, "win");
+	let session = newSessionFromBaseline([], now);
+	const first = reconcileSession(session, [historyFor(oldWin, 21)], [oldWin]);
+	assert.deepEqual({ wins: first.wins, losses: first.losses, netRr: first.netRr }, { wins: 1, losses: 0, netRr: 21 });
+
+	const rolledOff = reconcileSession(first.session, [], []);
+	assert.deepEqual({ wins: rolledOff.wins, losses: rolledOff.losses, netRr: rolledOff.netRr }, { wins: 1, losses: 0, netRr: 21 });
+	assert.equal(rolledOff.session.automatic?.[0]?.matchId, "old-api-win");
+});
+
+test("fifteen match session survives a rolling ten match Henrik window", () => {
+	const now = 1_800_000_000_000;
+	let session = newSessionFromBaseline([], now);
+	const allMatches: PlayerMatch[] = [];
+	const allHistory: MmrHistoryPoint[] = [];
+
+	for (let index = 0; index < 15; index++) {
+		const value = match(`match-${index}`, now + (index + 1) * 60_000, index % 3 === 0 ? "loss" : "win");
+		allMatches.unshift(value);
+		allHistory.unshift(historyFor(value));
+		const view = reconcileSession(session, allHistory.slice(0, 10), allMatches.slice(0, 10));
+		session = view.session;
+		assert.equal(view.wins + view.losses, index + 1, `record shrank at match ${index + 1}`);
+	}
+
+	const final = reconcileSession(session, allHistory.slice(0, 10), allMatches.slice(0, 10));
+	assert.equal(final.wins, 10);
+	assert.equal(final.losses, 5);
+	assert.equal(final.session.automatic?.length, 15);
+});
+
 test("reset followed immediately by the same refresh stays zero", () => {
 	const now = 1_800_000_000_000;
 	const win = match("old-win", now - 120_000, "win");
@@ -155,7 +189,18 @@ test("a new API match can replace a manual result without changing the visible r
 	assert.equal(after.session.manual[0]?.reconciledMatchId, "api-win");
 });
 
-test("deterministic 1000 transition stress run preserves reset and idempotency invariants", () => {
+test("persisted automatic match cannot consume a later manual fallback after rolling off cache", () => {
+	const now = 1_800_000_000_000;
+	const original = match("persisted-win", now + 1_000, "win");
+	let session = reconcileSession(newSessionFromBaseline([], now), [historyFor(original)], [original]).session;
+	const knownIds = (session.automatic ?? []).map((entry) => entry.matchId);
+	session = appendManualResult(session, "win", knownIds, undefined, now + 2_000, "manual-after-rolloff");
+	const view = reconcileSession(session, [], []);
+	assert.equal(view.wins, 2);
+	assert.equal(view.session.manual[0]?.reconciledMatchId, undefined);
+});
+
+test("deterministic 1000 transition stress run preserves resets, rolling windows and idempotency", () => {
 	let seed = 0x5eed1234;
 	const random = () => {
 		seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
@@ -168,15 +213,21 @@ test("deterministic 1000 transition stress run preserves reset and idempotency i
 	const history: MmrHistoryPoint[] = [];
 	let nextMatch = 0;
 	let nextManual = 0;
+	let previousRecord = 0;
 
 	for (let step = 0; step < 1000; step++) {
 		now += 1000;
 		const operation = Math.floor(random() * 6);
+		let reset = false;
 		if (operation === 0 || operation === 1) {
+			const knownIds = [
+				...matches.slice(0, 10).map((item) => item.id),
+				...(session.automatic ?? []).map((entry) => entry.matchId)
+			];
 			session = appendManualResult(
 				session,
 				operation === 0 ? "win" : "loss",
-				matches.map((item) => item.id),
+				knownIds,
 				undefined,
 				now,
 				`manual-${nextManual++}`
@@ -187,11 +238,13 @@ test("deterministic 1000 transition stress run preserves reset and idempotency i
 			history.unshift(historyFor(value));
 		} else if (operation === 5) {
 			const baselineCache = cache(now);
-			baselineCache.recentMatches = [...matches];
-			baselineCache.history = [...history];
+			baselineCache.recentMatches = matches.slice(0, 10);
+			baselineCache.history = history.slice(0, 10);
 			baselineCache.lastMatch = matches[0];
 			session = newSession(baselineCache, now);
-			const resetView = reconcileSession(session, history, matches);
+			reset = true;
+			previousRecord = 0;
+			const resetView = reconcileSession(session, history.slice(0, 10), matches.slice(0, 10));
 			assert.deepEqual(
 				{ wins: resetView.wins, losses: resetView.losses, netRr: resetView.netRr },
 				{ wins: 0, losses: 0, netRr: 0 },
@@ -199,15 +252,20 @@ test("deterministic 1000 transition stress run preserves reset and idempotency i
 			);
 		}
 
-		const first = reconcileSession(session, history, matches);
+		const windowHistory = history.slice(0, 10);
+		const windowMatches = matches.slice(0, 10);
+		const first = reconcileSession(session, windowHistory, windowMatches);
 		session = first.session;
-		const second = reconcileSession(session, history, matches);
+		const second = reconcileSession(session, windowHistory, windowMatches);
 		assert.deepEqual(
-			{ wins: second.wins, losses: second.losses, netRr: second.netRr, manual: second.session.manual },
-			{ wins: first.wins, losses: first.losses, netRr: first.netRr, manual: first.session.manual },
+			{ wins: second.wins, losses: second.losses, netRr: second.netRr, session: second.session },
+			{ wins: first.wins, losses: first.losses, netRr: first.netRr, session: first.session },
 			`idempotency failed at transition ${step}`
 		);
 		assert.ok(first.wins >= 0 && first.losses >= 0, `negative record at transition ${step}`);
+		const record = first.wins + first.losses;
+		if (!reset) assert.ok(record >= previousRecord, `record shrank at transition ${step}: ${record} < ${previousRecord}`);
+		previousRecord = record;
 		for (const entry of first.session.manual) {
 			if (entry.reconciledMatchId) assert.ok(!first.session.baselineMatchIds.includes(entry.reconciledMatchId));
 		}
