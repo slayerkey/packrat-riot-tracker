@@ -51,8 +51,14 @@ function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, 
 	};
 }
 
+function nextRevision() {
+	const current = Number(globalSettings.revision ?? 0);
+	return (Number.isFinite(current) && current > 0 ? Math.floor(current) : 0) + 1;
+}
+
 function saveGlobal() {
 	if (websocket?.readyState !== WebSocket.OPEN) return;
+	globalSettings = { ...globalSettings, revision: nextRevision() };
 	websocket.send(JSON.stringify({ event: "setGlobalSettings", context: uuid, payload: globalSettings }));
 }
 
@@ -82,8 +88,6 @@ function setAccountField(field, value) {
 		}
 	};
 	if (identityChanged) {
-		// Session baselines and player cache belong to one Riot account. Never let a previous
-		// player's session flash or get reused after the tracked Riot ID or region changes.
 		delete globalSettings.session;
 		delete globalSettings.cache;
 	}
