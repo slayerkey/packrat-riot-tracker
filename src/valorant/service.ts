@@ -18,7 +18,12 @@ export const REFRESH_MS = 5 * 60_000;
 export const STALE_MS = 15 * 60_000;
 
 function cloneStore(value: GlobalStore | undefined): GlobalStore {
-	return value && typeof value === "object" ? value : {};
+	return value && typeof value === "object" ? { ...value } : {};
+}
+
+function storeRevision(store: GlobalStore | undefined): number {
+	const value = Number(store?.revision ?? 0);
+	return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 }
 
 function accountFingerprint(account: AccountSettings | undefined): string {
@@ -132,6 +137,8 @@ class ValorantDataService {
 	private initialized = false;
 	private lastAccountFingerprint = "";
 	private mutationQueue: Promise<void> = Promise.resolve();
+	private store: GlobalStore = {};
+	private lastRevision = 0;
 
 	get state(): RuntimeState {
 		return this.runtime;
@@ -154,9 +161,9 @@ class ValorantDataService {
 		return next;
 	}
 
-	private enqueueMutation(task: () => Promise<void>): Promise<void> {
+	private enqueueMutation<T>(task: () => Promise<T>): Promise<T> {
 		const run = this.mutationQueue.then(() => task(), () => task());
-		this.mutationQueue = run.catch(() => undefined);
+		this.mutationQueue = run.then(() => undefined, () => undefined);
 		return run;
 	}
 
@@ -164,15 +171,27 @@ class ValorantDataService {
 		if (this.initialized) return;
 		this.initialized = true;
 		const store = cloneStore((await streamDeck.settings.getGlobalSettings()) as unknown as GlobalStore);
+		this.store = store;
+		this.lastRevision = storeRevision(store);
 		this.lastAccountFingerprint = accountFingerprint(store.account);
 		if (cacheMatchesAccount(store.account, store.cache)) {
 			this.runtime = { status: "ready", error: "none", snapshot: store.cache };
 		}
+
 		streamDeck.settings.onDidReceiveGlobalSettings((ev) => {
 			const nextStore = cloneStore(ev.settings as unknown as GlobalStore);
+			const nextRevision = storeRevision(nextStore);
+
+			// setGlobalSettings notifications can arrive after a newer local write. Never let an
+			// older notification repaint the deck with stale session counts or undo a reset.
+			if (nextRevision < this.lastRevision) return;
+
 			const nextFingerprint = accountFingerprint(nextStore.account);
 			const accountChanged = nextFingerprint !== this.lastAccountFingerprint;
+			this.store = nextStore;
+			this.lastRevision = nextRevision;
 			this.lastAccountFingerprint = nextFingerprint;
+
 			const cache = cacheMatchesAccount(nextStore.account, nextStore.cache) ? nextStore.cache : undefined;
 			if (accountChanged) {
 				this.runtime = cache ? { status: "ready", error: "none", snapshot: cache } : { status: "loading", error: "none" };
@@ -185,12 +204,20 @@ class ValorantDataService {
 	}
 
 	async getStore(): Promise<GlobalStore> {
-		return cloneStore((await streamDeck.settings.getGlobalSettings()) as unknown as GlobalStore);
+		return cloneStore(this.store);
 	}
 
-	private async writeStore(store: GlobalStore): Promise<void> {
-		this.lastAccountFingerprint = accountFingerprint(store.account);
-		await streamDeck.settings.setGlobalSettings(store as unknown as JsonObject);
+	private async writeStore(store: GlobalStore): Promise<GlobalStore> {
+		const revision = Math.max(this.lastRevision, storeRevision(store)) + 1;
+		const nextStore = { ...store, revision };
+
+		// Update memory before the IPC write. Every rapid key press now observes the previous press,
+		// even if Stream Deck has not echoed the global settings event back yet.
+		this.store = nextStore;
+		this.lastRevision = revision;
+		this.lastAccountFingerprint = accountFingerprint(nextStore.account);
+		await streamDeck.settings.setGlobalSettings(nextStore as unknown as JsonObject);
+		return nextStore;
 	}
 
 	async refresh(force = false): Promise<RuntimeState> {
@@ -226,55 +253,57 @@ class ValorantDataService {
 		try {
 			const bundle = await fetchHenrikBundle(initialStore.account!);
 
-			// Re-read settings after the network request. A manual result, session reset, or account
-			// edit may have happened while HenrikDev was responding. Never overwrite newer local state
-			// with the snapshot captured before the request started.
-			const store = await this.getStore();
-			if (accountFingerprint(store.account) !== requestedAccount) {
-				this.refreshAgain = true;
-				const cache = cacheMatchesAccount(store.account, store.cache) ? store.cache : undefined;
-				return this.setRuntime({ status: cache ? "ready" : "loading", error: "none", snapshot: cache });
-			}
-
-			const samePlayer = store.cache?.puuid === bundle.account.puuid;
-			let session = samePlayer ? store.session : undefined;
-			if (!session) {
-				session = newSessionFromBaseline([
-					...bundle.history.map((entry) => entry.matchId),
-					...bundle.matches.map((match) => match.id)
-				]);
-			}
-
-			const sessionView = reconcileSession(session, bundle.history, bundle.matches);
-			session = sessionView.session;
-			const recentMatches = bundle.matches.slice(0, 10);
-			const snapshot: TrackerSnapshot = {
-				fetchedAt: Date.now(),
-				accountName: bundle.account.name,
-				accountTag: bundle.account.tag,
-				puuid: bundle.account.puuid,
-				rankName: bundle.rank.name,
-				rankTierId: bundle.rank.tierId,
-				rankIcon: bundle.rank.icon,
-				rr: bundle.rank.rr,
-				lastChange: bundle.rank.lastChange,
-				lastMatch: recentMatches[0],
-				headshotPercent: headshotPercent(recentMatches),
-				damage: recentMatches[0]?.damage ?? null,
-				acs: overallAcs(recentMatches),
-				agents: aggregate(recentMatches, "agent"),
-				maps: aggregate(recentMatches, "map"),
-				recentMatches,
-				history: bundle.history,
-				session: {
-					wins: sessionView.wins,
-					losses: sessionView.losses,
-					netRr: sessionView.netRr
+			// Network fetches run outside the mutation queue, but their commit is serialized with
+			// manual Win/Loss and Reset writes. A request that started before a reset can therefore
+			// never write an older session snapshot after that reset.
+			return await this.enqueueMutation(async () => {
+				const store = await this.getStore();
+				if (accountFingerprint(store.account) !== requestedAccount) {
+					this.refreshAgain = true;
+					const cache = cacheMatchesAccount(store.account, store.cache) ? store.cache : undefined;
+					return this.setRuntime({ status: cache ? "ready" : "loading", error: "none", snapshot: cache });
 				}
-			};
 
-			await this.writeStore({ ...store, session, cache: snapshot });
-			return this.setRuntime({ status: "ready", error: "none", snapshot });
+				const samePlayer = store.cache?.puuid === bundle.account.puuid;
+				let session = samePlayer ? store.session : undefined;
+				if (!session) {
+					session = newSessionFromBaseline([
+						...bundle.history.map((entry) => entry.matchId),
+						...bundle.matches.map((match) => match.id)
+					]);
+				}
+
+				const sessionView = reconcileSession(session, bundle.history, bundle.matches);
+				session = sessionView.session;
+				const recentMatches = bundle.matches.slice(0, 10);
+				const snapshot: TrackerSnapshot = {
+					fetchedAt: Date.now(),
+					accountName: bundle.account.name,
+					accountTag: bundle.account.tag,
+					puuid: bundle.account.puuid,
+					rankName: bundle.rank.name,
+					rankTierId: bundle.rank.tierId,
+					rankIcon: bundle.rank.icon,
+					rr: bundle.rank.rr,
+					lastChange: bundle.rank.lastChange,
+					lastMatch: recentMatches[0],
+					headshotPercent: headshotPercent(recentMatches),
+					damage: recentMatches[0]?.damage ?? null,
+					acs: overallAcs(recentMatches),
+					agents: aggregate(recentMatches, "agent"),
+					maps: aggregate(recentMatches, "map"),
+					recentMatches,
+					history: bundle.history,
+					session: {
+						wins: sessionView.wins,
+						losses: sessionView.losses,
+						netRr: sessionView.netRr
+					}
+				};
+
+				await this.writeStore({ ...store, session, cache: snapshot });
+				return this.setRuntime({ status: "ready", error: "none", snapshot });
+			});
 		} catch (error) {
 			const mapped = errorKind(error);
 			streamDeck.logger.warn(`HenrikDev refresh failed: ${mapped.detail}`);
