@@ -206,9 +206,6 @@ class ValorantDataService {
 		streamDeck.settings.onDidReceiveGlobalSettings((ev) => {
 			const nextStore = cloneStore(ev.settings as unknown as GlobalStore);
 			const nextRevision = storeRevision(nextStore);
-
-			// The plugin is the sole global-settings writer. Its in-memory copy is updated before
-			// every IPC write, so an echo at the same or an older revision is redundant and ignored.
 			if (nextRevision <= this.lastRevision) return;
 
 			const nextFingerprint = accountFingerprint(nextStore.account);
@@ -235,9 +232,6 @@ class ValorantDataService {
 	private async writeStore(store: GlobalStore): Promise<GlobalStore> {
 		const revision = Math.max(this.lastRevision, storeRevision(store)) + 1;
 		const nextStore = { ...store, revision };
-
-		// Update memory before the IPC write. Rapid controls and network commits always observe the
-		// newest state even if Stream Deck has not echoed the write back yet.
 		this.store = nextStore;
 		this.lastRevision = revision;
 		this.lastAccountFingerprint = accountFingerprint(nextStore.account);
@@ -310,9 +304,6 @@ class ValorantDataService {
 		this.setRuntime({ status: "loading", error: "none", snapshot: initialCache });
 		try {
 			const bundle = await fetchHenrikBundle(initialStore.account!);
-
-			// Fetch outside the queue, commit inside it. A request that started before a reset,
-			// account edit, or manual result can never overwrite that newer mutation afterward.
 			return await this.enqueueMutation(async () => {
 				const store = await this.getStore();
 				if (accountFingerprint(store.account) !== requestedAccount) {
@@ -375,7 +366,11 @@ class ValorantDataService {
 			const store = await this.getStore();
 			const cache = cacheMatchesAccount(store.account, store.cache) ? store.cache : undefined;
 			const session = store.session ?? newSession(cache);
-			let nextSession = appendManualResult(session, result, knownMatchIds(cache), rr);
+			const knownIds = [
+				...knownMatchIds(cache),
+				...(session.automatic ?? []).map((entry) => entry.matchId)
+			];
+			let nextSession = appendManualResult(session, result, knownIds, rr);
 			let nextCache = cache;
 
 			if (cache) {
