@@ -12,6 +12,7 @@ export type ManualResult = {
 	result: "win" | "loss";
 	rr?: number;
 	createdAt: number;
+	knownMatchIds?: string[];
 	reconciledMatchId?: string;
 };
 
