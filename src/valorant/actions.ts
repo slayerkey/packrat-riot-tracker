@@ -18,10 +18,12 @@ function keyImage(markup: string): string {
 
 /**
  * Stream Deck IPC is much more expensive than rendering a small SVG string. Cache the exact image
- * per key instance and never send a duplicate setImage command. This keeps refresh/status events
- * from repainting fifteen unchanged keys over and over.
+ * per visible key instance and never send a duplicate setImage command during the same appearance.
  */
 const lastImageByAction = new WeakMap<object, string>();
+function invalidateKeyImage(key: KeyAction<ActionSettings>): void {
+	lastImageByAction.delete(key as unknown as object);
+}
 async function setKeyImage(key: KeyAction<ActionSettings>, image: string): Promise<void> {
 	const instance = key as unknown as object;
 	if (lastImageByAction.get(instance) === image) return;
@@ -68,6 +70,7 @@ abstract class MetricActionBase extends AccountAwareAction {
 
 	override async onWillAppear(ev: WillAppearEvent<ActionSettings>): Promise<void> {
 		if (!ev.action.isKey()) return;
+		invalidateKeyImage(ev.action);
 		const settings = ev.payload.settings ?? {};
 		this.settingsByAction.set(ev.action as unknown as object, settings);
 		await this.paint(ev.action, settings);
@@ -214,7 +217,9 @@ abstract class LogResultAction extends AccountAwareAction {
 	}
 
 	override async onWillAppear(ev: WillAppearEvent<ActionSettings>): Promise<void> {
-		if (ev.action.isKey()) await this.paint(ev.action);
+		if (!ev.action.isKey()) return;
+		invalidateKeyImage(ev.action);
+		await this.paint(ev.action);
 	}
 
 	override async onKeyDown(ev: KeyDownEvent<ActionSettings>): Promise<void> {
@@ -249,7 +254,11 @@ export class SessionResetAction extends AccountAwareAction {
 	}
 
 	override async onWillAppear(ev: WillAppearEvent<ActionSettings>): Promise<void> {
-		if (ev.action.isKey()) await this.paintDefault(ev.action);
+		if (!ev.action.isKey()) return;
+		const key = ev.action as unknown as object;
+		this.armedUntil.delete(key);
+		invalidateKeyImage(ev.action);
+		await this.paintDefault(ev.action);
 	}
 
 	override async onKeyDown(ev: KeyDownEvent<ActionSettings>): Promise<void> {
@@ -283,7 +292,9 @@ export class SpikeTimerAction extends AccountAwareAction {
 	private timer: NodeJS.Timeout | null = null;
 
 	override async onWillAppear(ev: WillAppearEvent<ActionSettings>): Promise<void> {
-		if (ev.action.isKey()) await this.paint(ev.action);
+		if (!ev.action.isKey()) return;
+		invalidateKeyImage(ev.action);
+		await this.paint(ev.action);
 	}
 
 	override async onKeyDown(ev: KeyDownEvent<ActionSettings>): Promise<void> {
