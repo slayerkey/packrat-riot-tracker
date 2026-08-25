@@ -1,13 +1,14 @@
 import type { ManualResult, MmrHistoryPoint, PlayerMatch, SessionState, TrackerSnapshot } from "./model";
 
 export const MANUAL_RECONCILE_WINDOW_MS = 3 * 60 * 60_000;
+export const MAX_MANUAL_RESULTS = 100;
 
 export function uniqueMatchIds(ids: Array<string | undefined>): string[] {
 	const unique = new Set<string>();
 	for (const id of ids) {
 		if (id) unique.add(id);
 	}
-	return [...unique].slice(0, 40);
+	return [...unique].slice(0, 100);
 }
 
 export function knownMatchIds(cache: TrackerSnapshot | undefined): string[] {
@@ -31,6 +32,27 @@ export function newSession(cache: TrackerSnapshot | undefined, now = Date.now())
 	return newSessionFromBaseline(knownMatchIds(cache), now);
 }
 
+export function appendManualResult(
+	session: SessionState,
+	result: "win" | "loss",
+	knownIds: string[],
+	rr?: number,
+	now = Date.now(),
+	id = `${now}-${Math.random().toString(36).slice(2, 8)}`
+): SessionState {
+	const manual: ManualResult = {
+		id,
+		result,
+		rr: typeof rr === "number" && Number.isFinite(rr) ? rr : undefined,
+		createdAt: now,
+		knownMatchIds: uniqueMatchIds(knownIds)
+	};
+	return {
+		...session,
+		manual: [...session.manual, manual].slice(-MAX_MANUAL_RESULTS)
+	};
+}
+
 export function reconcileSession(
 	session: SessionState,
 	history: MmrHistoryPoint[],
@@ -44,9 +66,8 @@ export function reconcileSession(
 	const baseline = new Set(session.baselineMatchIds);
 	const matchesById = new Map(matches.map((match) => [match.id, match]));
 
-	// A session starts at an exact moment. The reconciliation window is only for associating a
-	// manual log with a newly arriving API match; it must never pull matches from before a reset
-	// back into the session.
+	// Session membership is time bounded and baseline bounded. A late API response may reveal an
+	// older match, but a reset is a hard boundary and older matches can never re-enter the session.
 	const sessionHistory = history.filter((entry) => {
 		if (!entry.matchId || baseline.has(entry.matchId)) return false;
 		if (entry.date > 0) return entry.date >= session.startedAt;
