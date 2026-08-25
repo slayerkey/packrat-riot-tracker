@@ -141,6 +141,19 @@ function normalizeAccountValue(field: AccountField, value: unknown): string | Re
 	return trimmed;
 }
 
+function applyAccountField(current: AccountSettings, field: AccountField, value: string | Region | undefined): AccountSettings {
+	switch (field) {
+		case "riotId":
+			return { ...current, riotId: value as string | undefined };
+		case "region":
+			return { ...current, region: value as Region | undefined };
+		case "apiKey":
+			return { ...current, apiKey: value as string | undefined };
+		case "actEndDate":
+			return { ...current, actEndDate: value as string | undefined };
+	}
+}
+
 class ValorantDataService {
 	private runtime: RuntimeState = { status: "idle", error: "none" };
 	private listeners = new Set<() => void | Promise<void>>();
@@ -239,10 +252,7 @@ class ValorantDataService {
 			const nextValue = normalizeAccountValue(field, value);
 			if (current[field] === nextValue) return false;
 
-			const account = { ...current } as AccountSettings & Record<string, unknown>;
-			if (nextValue === undefined) delete account[field];
-			else account[field] = nextValue;
-
+			const account = applyAccountField(current, field, nextValue);
 			const identityChanged = (field === "riotId" || field === "region") && current[field] !== nextValue;
 			const nextStore: GlobalStore = { ...store, account };
 			if (identityChanged) {
