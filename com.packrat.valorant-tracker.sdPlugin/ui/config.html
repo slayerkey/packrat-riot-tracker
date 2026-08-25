@@ -18,7 +18,7 @@
 			<h2>Riot Account</h2>
 			<label for="riotId">Riot ID</label>
 			<input id="riotId" type="text" autocomplete="off" spellcheck="false" placeholder="Name#TAG" />
-			<div class="help">Include the tag after # exactly as it appears in Valorant.</div>
+			<div class="help">Include the tag after # exactly as it appears in Valorant. Track only an account you own or have permission to use.</div>
 
 			<label for="region">Region fallback</label>
 			<select id="region">
@@ -67,10 +67,10 @@
 		</section>
 
 		<section id="manualRrCard" class="card hidden">
-			<h2>Next Manual Result</h2>
+			<h2>Advanced Manual Fallback</h2>
 			<label for="manualRr">RR adjustment <span class="optional">optional, one time</span></label>
 			<input id="manualRr" type="number" step="1" min="-100" max="100" placeholder="Example: 22 or -18" />
-			<div class="help">This value is consumed and cleared after you press this Log Win or Log Loss key. Leave it blank to log only the result.</div>
+			<div class="help">Competitive matches are tracked automatically. Use Log Win or Log Loss only as a fallback when automatic match data is unavailable. This RR value is consumed after one manual log.</div>
 		</section>
 
 		<section class="privacy">
