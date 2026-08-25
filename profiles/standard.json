@@ -17,8 +17,8 @@
     { "row": 1, "column": 3, "action": "com.packrat.valorant-tracker.top-map", "settings": { "slot": 1 } },
     { "row": 1, "column": 4, "action": "com.packrat.valorant-tracker.damage" },
 
-    { "row": 2, "column": 0, "action": "com.packrat.valorant-tracker.log-win" },
-    { "row": 2, "column": 1, "action": "com.packrat.valorant-tracker.log-loss" },
+    { "row": 2, "column": 0, "action": "com.packrat.valorant-tracker.agent-win-rate", "settings": { "slot": 1 } },
+    { "row": 2, "column": 1, "action": "com.packrat.valorant-tracker.map-win-rate", "settings": { "slot": 1 } },
     { "row": 2, "column": 2, "action": "com.packrat.valorant-tracker.spike-timer" },
     { "row": 2, "column": 3, "action": "com.packrat.valorant-tracker.acs" },
     { "row": 2, "column": 4, "action": "com.packrat.valorant-tracker.session-reset" }
