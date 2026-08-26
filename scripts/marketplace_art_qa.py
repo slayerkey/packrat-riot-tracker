@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ART = ROOT / "dist" / "marketplace-art"
 PLUGIN_ICONS = ROOT / "com.packrat.valorant-tracker.sdPlugin" / "imgs" / "plugin"
 REPORT = ROOT / "dist" / "marketplace-art-qa.json"
+ART_SOURCE = ROOT / "scripts" / "build_marketplace_art.py"
 
 EXPECTED = {
     ART / "1-thumbnail.png": ((1920, 960), 50_000),
@@ -63,6 +64,14 @@ listing_hashes = [digests.get(str(path.relative_to(ROOT))) for path in listing_p
 listing_hashes = [value for value in listing_hashes if value]
 check(len(listing_hashes) == 5, "all five listing images produced hashes")
 check(len(set(listing_hashes)) == len(listing_hashes), "thumbnail and gallery images are byte-distinct")
+
+# The images are deterministic raster output, so semantic product-copy checks live against the
+# deterministic renderer source. This prevents an old interaction model from passing image-size QA.
+art_source = ART_SOURCE.read_text(encoding="utf-8")
+check('"TAP TWICE RESET"' in art_source, "Marketplace controls art documents the current two-tap reset")
+check('"HOLD RESET"' not in art_source, "Marketplace art cannot regress to the removed hold-reset interaction")
+check('"Automatic region detection"' in art_source, "Marketplace setup art documents automatic region detection")
+check('("LOG WIN", GREEN)' not in art_source and '("LOG LOSS", RED)' not in art_source, "Marketplace default controls art does not present manual fallback logging as the primary workflow")
 
 report = {
     "product": "valorant-tracker",
