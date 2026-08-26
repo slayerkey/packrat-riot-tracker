@@ -4,6 +4,7 @@
 	"private": true,
 	"scripts": {
 		"build": "rollup -c",
+		"typecheck": "tsc --noEmit",
 		"test": "tsx --test tests/session.test.ts tests/valorant.test.ts",
 		"visual:fixtures": "tsx scripts/build_visual_fixtures.ts",
 		"smoke:henrik": "tsx scripts/henrik_smoke.ts",
