@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { __test, parseRiotId } from "../src/valorant/henrik";
+import { __test, HenrikError, parseRiotId } from "../src/valorant/henrik";
 import type { RuntimeState, TrackerSnapshot } from "../src/valorant/model";
 import { renderControl, renderMetric, renderTimer } from "../src/valorant/render";
 
@@ -64,6 +64,21 @@ test("region normalization accepts Henrik account regions case insensitively", (
 	assert.equal(__test.normalizeRegion("EU"), "eu");
 	assert.equal(__test.normalizeRegion("na"), "na");
 	assert.equal(__test.normalizeRegion("unknown"), undefined);
+});
+
+test("region discovery falls back on transient failures but not authentication failures", () => {
+	for (const status of [0, 408, 404, 410, 429, 500, 503]) {
+		assert.equal(__test.shouldUseRegionFallback(new HenrikError(status, "fixture")), true, `status ${status}`);
+	}
+	for (const status of [400, 401, 403]) {
+		assert.equal(__test.shouldUseRegionFallback(new HenrikError(status, "fixture")), false, `status ${status}`);
+	}
+});
+
+test("network timeout and abort failures map to HTTP timeout semantics", () => {
+	assert.equal(__test.networkFailureStatus({ name: "TimeoutError" }), 408);
+	assert.equal(__test.networkFailureStatus({ name: "AbortError" }), 408);
+	assert.equal(__test.networkFailureStatus(new Error("socket failed")), 0);
 });
 
 test("legacy Henrik match shape normalizes result, combat stats, damage and rounds", () => {
@@ -138,6 +153,31 @@ test("Henrik v4 match shape normalizes nested damage, agent art and team result"
 	assert.equal(normalized.damage, 3891);
 	assert.equal(normalized.rounds, 22);
 	assert.match(normalized.agentIcon ?? "", /media\.valorant-api\.com\/agents\/117ed9e3-49f3-6512-3ccf-0cada7e3823b\/displayicon\.png/);
+});
+
+test("equal round scores normalize a competitive draw instead of a loss", () => {
+	const match = {
+		metadata: { match_id: "draw-match", map: { name: "Ascent" }, started_at: "2026-08-24T20:00:00.000Z" },
+		players: [
+			{
+				puuid: "fixture-puuid",
+				name: "Phoenix",
+				tag: "1337",
+				team_id: "Red",
+				agent: { name: "Omen" },
+				stats: { kills: 20, deaths: 20, assists: 7, score: 5000, damage: { dealt: 4000 } }
+			}
+		],
+		teams: [
+			{ team_id: "Red", rounds: { won: 14, lost: 14 }, won: false },
+			{ team_id: "Blue", rounds: { won: 14, lost: 14 }, won: false }
+		]
+	};
+	const normalized = __test.normalizeMatch(match, "fixture-puuid", "Phoenix", "1337");
+	assert.ok(normalized);
+	assert.equal(__test.matchDrawn(match), true);
+	assert.equal(normalized.result, "draw");
+	assert.equal(normalized.rounds, 28);
 });
 
 test("Henrik history helper accepts array and nested history response shapes", () => {
