@@ -149,8 +149,8 @@ def build_thumbnail(standard: Image.Image) -> Image.Image:
     draw = ImageDraw.Draw(canvas)
     draw.text((115, 345), "RANKED INFO", font=font(54), fill=WHITE)
     draw.text((115, 405), "AT A GLANCE", font=font(54), fill=WHITE)
-    draw.text((118, 495), "Rank, RR, session progress, recent stats,", font=font(26, False), fill=MUTED)
-    draw.text((118, 532), "agents, maps and match controls.", font=font(26, False), fill=MUTED)
+    draw.text((118, 495), "Rank, RR, automatic session tracking,", font=font(26, False), fill=MUTED)
+    draw.text((118, 532), "recent stats, agents and maps.", font=font(26, False), fill=MUTED)
     x = 118
     for text, accent in (("20 ACTIONS", RED), ("1 SHARED SETUP", GREEN), ("STANDARD • XL • NEO", AMBER)):
         x = pill(canvas, x, 630, text, accent)
@@ -161,7 +161,7 @@ def build_thumbnail(standard: Image.Image) -> Image.Image:
 
 def build_session(standard: Image.Image) -> Image.Image:
     canvas = background()
-    header(canvas, "RANKED SESSION", "Track the whole session", "See the numbers that matter without leaving the game")
+    header(canvas, "RANKED SESSION", "Track the whole session", "Automatic Competitive results stay with the session")
     preview = resized(standard, 1030, 610)
     paste_shadow(canvas, preview, 760, 300)
     draw = ImageDraw.Draw(canvas)
@@ -173,7 +173,7 @@ def build_session(standard: Image.Image) -> Image.Image:
         draw.text((140, y + 52), value, font=font(39), fill=accent)
         draw.text((455, y + 68), secondary, font=font(23), fill=WHITE)
         y += 165
-    draw.text((115, 845), "Session state persists and manual results reconcile with later API matches.", font=font(20, False), fill=MUTED)
+    draw.text((115, 845), "Persistent session accounting survives long play sessions and rolling recent-match windows.", font=font(18, False), fill=MUTED)
     return canvas
 
 
@@ -198,7 +198,7 @@ def build_xl(xl: Image.Image) -> Image.Image:
 
 def build_controls(standard: Image.Image, states: Image.Image) -> Image.Image:
     canvas = background()
-    header(canvas, "MATCH CONTROLS", "Useful when the round is live", "Manual session controls and a glanceable 45 second spike timer")
+    header(canvas, "MATCH CONTROLS", "Useful while you play", "A glanceable 45 second spike timer and protected Session Reset")
     control_crop = standard.crop((0, 360, standard.width, standard.height))
     controls = resized(control_crop, 1100, 330)
     round_panel(canvas, (90, 330, 1260, 780), 32)
@@ -209,8 +209,8 @@ def build_controls(standard: Image.Image, states: Image.Image) -> Image.Image:
     draw = ImageDraw.Draw(canvas)
     draw.text((1320, 675), "45 → 20 → 7 → 0", font=font(31), fill=WHITE)
     draw.text((1320, 720), "Normal, warning, critical, complete", font=font(19, False), fill=MUTED)
-    x = 235
-    for text, accent in (("LOG WIN", GREEN), ("LOG LOSS", RED), ("SPIKE TIMER", AMBER), ("HOLD RESET", RED)):
+    x = 205
+    for text, accent in (("45 SEC TIMER", AMBER), ("WARNING", AMBER), ("CRITICAL", RED), ("TAP TWICE RESET", RED)):
         x = pill(canvas, x, 840, text, accent)
     return canvas
 
@@ -228,7 +228,7 @@ def build_setup() -> Image.Image:
         draw.text((260, y + 47), "••••••••••••" if masked else value, font=font(22, False), fill=WHITE)
 
     field(405, "Riot ID", "Name#TAG")
-    field(520, "Region", "North America (NA)")
+    field(520, "Fallback region", "North America (NA)")
     field(635, "HenrikDev API Key", "", True)
     draw.rounded_rectangle((235, 762, 855, 812), radius=10, fill=(42, 23, 26, 255), outline=(*RED, 170), width=2)
     draw.text((435, 775), "OPEN HENRIKDEV DASHBOARD", font=font(17), fill=(255, 220, 223))
@@ -236,9 +236,9 @@ def build_setup() -> Image.Image:
     draw.text((1030, 420), "ALL 20 ACTIONS", font=font(52), fill=WHITE)
     bullets = (
         "Riot ID in Name#TAG format",
-        "Choose your region",
+        "Automatic region detection",
+        "Fallback region if detection is unavailable",
         "Paste your HenrikDev API key once",
-        "Optional act end date",
         "No PackRat account or analytics service",
     )
     y = 535
