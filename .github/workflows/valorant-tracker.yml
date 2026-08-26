@@ -4,10 +4,11 @@ on:
   push:
     branches:
       - product/valorant-tracker
-  pull_request:
-    branches:
-      - master
   workflow_dispatch:
+
+concurrency:
+  group: valorant-tracker-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
