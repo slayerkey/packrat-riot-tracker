@@ -1,6 +1,8 @@
 import type { AccountSettings, MmrHistoryPoint, PlayerMatch, Region } from "./model";
 
 const BASE_URL = "https://api.henrikdev.xyz";
+const API_TIMEOUT_MS = 12_000;
+const ASSET_TIMEOUT_MS = 6_000;
 const assetCache = new Map<string, Promise<string | undefined>>();
 const rankIconCache = new Map<string, string | undefined>();
 const accountRegionCache = new Map<string, Region>();
@@ -26,6 +28,11 @@ export function parseRiotId(value: string | undefined): { name: string; tag: str
 
 export const REGIONS: Region[] = ["na", "eu", "ap", "kr", "latam", "br"];
 
+function networkFailureStatus(error: unknown): number {
+	const name = typeof error === "object" && error && "name" in error ? String((error as { name?: unknown }).name ?? "") : "";
+	return name === "TimeoutError" || name === "AbortError" ? 408 : 0;
+}
+
 async function requestJson(path: string, apiKey: string): Promise<any> {
 	let response: Response;
 	try {
@@ -33,10 +40,11 @@ async function requestJson(path: string, apiKey: string): Promise<any> {
 			headers: {
 				Authorization: apiKey,
 				Accept: "application/json"
-			}
+			},
+			signal: AbortSignal.timeout(API_TIMEOUT_MS)
 		});
 	} catch (error) {
-		throw new HenrikError(0, error instanceof Error ? error.message : "network error");
+		throw new HenrikError(networkFailureStatus(error), error instanceof Error ? error.message : "network error");
 	}
 
 	let body: any = null;
@@ -59,7 +67,7 @@ async function fetchAssetDataUrl(url: string | undefined): Promise<string | unde
 	if (existing) return existing;
 	const promise = (async () => {
 		try {
-			const response = await fetch(url);
+			const response = await fetch(url, { signal: AbortSignal.timeout(ASSET_TIMEOUT_MS) });
 			if (!response.ok) return undefined;
 			const bytes = Buffer.from(await response.arrayBuffer());
 			if (!bytes.length || bytes.length > 1_000_000) return undefined;
@@ -127,6 +135,22 @@ function teamWon(match: any, team: string): boolean | null {
 	return null;
 }
 
+function teamRoundScore(entry: any): number {
+	return asNumber(entry?.rounds_won ?? entry?.roundsWon ?? entry?.rounds?.won, -1);
+}
+
+function matchDrawn(match: any): boolean {
+	const direct = asString(match?.result ?? match?.metadata?.result).toLowerCase();
+	if (direct.includes("draw") || direct.includes("tie")) return true;
+	const teams = match?.teams;
+	const scores = Array.isArray(teams)
+		? teams.map((entry) => teamRoundScore(entry)).filter((score) => score >= 0)
+		: teams && typeof teams === "object"
+			? Object.values(teams).map((entry) => teamRoundScore(entry)).filter((score) => score >= 0)
+			: [];
+	return scores.length >= 2 && scores[0] === scores[1];
+}
+
 function totalRounds(match: any): number {
 	const explicit = asNumber(
 		match?.metadata?.rounds_played ??
@@ -146,7 +170,10 @@ function totalRounds(match: any): number {
 		if (won > 0) return won;
 	}
 	if (teams && typeof teams === "object") {
-		const won = Object.values(teams).reduce<number>((sum, entry: any) => sum + asNumber(entry?.rounds_won ?? entry?.roundsWon), 0);
+		const won = Object.values(teams).reduce<number>(
+			(sum, entry: any) => sum + asNumber(entry?.rounds_won ?? entry?.roundsWon ?? entry?.rounds?.won),
+			0
+		);
 		if (won > 0) return won;
 	}
 	return 0;
@@ -208,15 +235,13 @@ function normalizeMatch(match: any, puuid: string, name: string, tag: string): P
 	const stats = playerStats(player);
 	const team = normalizeTeam(player?.team ?? player?.team_id ?? player?.teamId);
 	const won = teamWon(match, team);
+	const direct = asString(player?.result ?? match?.result).toLowerCase();
 	let result: PlayerMatch["result"] = "unknown";
-	if (won === true) result = "win";
+	if (direct.includes("draw") || direct.includes("tie") || matchDrawn(match)) result = "draw";
+	else if (won === true) result = "win";
 	else if (won === false) result = "loss";
-	else {
-		const direct = asString(player?.result ?? match?.result).toLowerCase();
-		if (direct.includes("win")) result = "win";
-		else if (direct.includes("loss") || direct.includes("defeat")) result = "loss";
-		else if (direct.includes("draw")) result = "draw";
-	}
+	else if (direct.includes("win")) result = "win";
+	else if (direct.includes("loss") || direct.includes("defeat")) result = "loss";
 
 	const rounds = asNumber(stats?.rounds_played ?? stats?.roundsPlayed, totalRounds(match));
 	const agentId = asString(player?.agent?.id);
@@ -279,6 +304,11 @@ async function legacyRankIcon(region: Region, name: string, tag: string, apiKey:
 	}
 }
 
+function shouldUseRegionFallback(error: unknown): boolean {
+	if (!(error instanceof HenrikError)) return false;
+	return [0, 408, 404, 410, 429].includes(error.status) || error.status >= 500;
+}
+
 async function resolveRegion(name: string, tag: string, apiKey: string, fallback: Region): Promise<{ region: Region; account?: any }> {
 	const key = `${name.trim().toLowerCase()}#${tag.trim().toLowerCase()}`;
 	const cached = accountRegionCache.get(key);
@@ -292,11 +322,9 @@ async function resolveRegion(name: string, tag: string, apiKey: string, fallback
 		accountRegionCache.set(key, region);
 		return { region, account };
 	} catch (error) {
-		// Region auto detection should not make previously working accounts fail if the account
-		// helper is temporarily unavailable. Fall back to the user's selected shard in that case.
-		if (error instanceof HenrikError && [404, 410, 501].includes(error.status)) {
-			return { region: fallback };
-		}
+		// Region discovery is optional. Transient account-helper failures should fall back to the
+		// user's selected shard rather than blocking otherwise valid rank and match endpoints.
+		if (shouldUseRegionFallback(error)) return { region: fallback };
 		throw error;
 	}
 }
@@ -390,4 +418,12 @@ export async function fetchHenrikBundle(settings: AccountSettings): Promise<Henr
 	};
 }
 
-export const __test = { normalizeMatch, historyArray, totalRounds, normalizeRegion };
+export const __test = {
+	normalizeMatch,
+	historyArray,
+	totalRounds,
+	normalizeRegion,
+	matchDrawn,
+	shouldUseRegionFallback,
+	networkFailureStatus
+};
