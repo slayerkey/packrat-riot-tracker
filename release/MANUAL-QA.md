@@ -1,116 +1,85 @@
 # Valorant Tracker final manual QA
 
-Automated CI must be green before this checklist starts. This checklist only covers boundaries that need a real Stream Deck installation, a real HenrikDev account, or human readability judgement.
+Automated CI must be green before this checklist starts. This checklist is intentionally limited to boundaries that require a real Stream Deck installation, a real HenrikDev account, or physical responsiveness judgement.
 
-## Current observed smoke status
+## Already confirmed on real Stream Deck software
 
-Observed on a real local Stream Deck development installation on 2026-08-24:
+Observed during local development testing:
 
 * PASS: Valorant Tracker plugin category appears in Stream Deck.
 * PASS: Shared Riot account and HenrikDev settings persist between actions.
 * PASS: Current Rank populates successfully from HenrikDev on a real account.
 * PASS: Current RR populates successfully from HenrikDev on a real account.
-* PASS: Standard, XL and Neo `.streamDeckProfile` archives are present in the plugin source and release candidate.
-* OPEN: Rat Dev linking did not visibly auto-install or switch to a bundled profile. Standard profile import and action resolution still need to be confirmed in current Stream Deck software.
-* OPEN: Remaining actions, session controls, timer behavior, stale-data behavior and physical readability still need spot checking.
+* PASS: Standard profile was manually imported and its action references resolved correctly.
+* PASS: Standard, XL and Neo `.streamDeckProfile` archives are bundled in the plugin and release candidate.
+
+A developer link does not prove Marketplace style profile auto installation. That remains a packaged installation release boundary.
 
 No API key is recorded in this checklist or committed to the repository.
 
-## 1. Install candidate
+## 1. Install exact current development candidate
 
-1. Install the packaged `com.packrat.valorant-tracker.streamDeckPlugin` release candidate.
-2. Confirm Stream Deck starts the plugin without a warning icon or crash loop.
-3. Confirm the Valorant Tracker category contains all 20 actions.
-4. Confirm installing the plugin does not automatically switch the user's active Stream Deck page.
+Run:
 
-## 2. Bundled profiles
+```text
+rat dev valorant-tracker
+```
 
-For each available device model:
+A successful run must report the exact current source commit and show both Link and Restart as verified. Rat Dev now builds and validates an isolated candidate before replacing the working plugin, and attempts rollback if activation fails.
 
-1. Confirm the matching Valorant Tracker profile was installed.
-2. Open the profile and confirm every expected key is present in the intended position.
-3. Confirm profile keys resolve to Valorant Tracker actions rather than missing plugin placeholders.
-4. Confirm the profile remains editable by the user.
-5. Confirm Standard uses 15 keys, XL fits the 8 by 4 grid without filler collisions, and Neo uses 8 keys.
+After activation:
 
-## 3. One time setup
+1. Confirm the existing Valorant Tracker profile resolves without question mark placeholders.
+2. Confirm the Stream Deck app and Standard dashboard remain responsive when opening the profile and switching away from it.
+3. Confirm Current Rank and Current RR populate from the configured real account.
 
-1. Select any Valorant Tracker action.
-2. Enter a real Riot ID in `Name#TAG` format.
-3. Choose the correct region.
-4. Press `Open HenrikDev Dashboard` and confirm it opens the HenrikDev dashboard in the default browser.
-5. Generate or retrieve the user's HenrikDev API key from the HenrikDev dashboard.
-6. Paste the API key once.
-7. Select a different Valorant Tracker action and confirm the same Riot ID, region and API key are already available because account setup is global.
-8. Confirm the API key input is masked.
+## 2. Session reset and persistence
 
-## 4. Live data
+1. Confirm Session Reset shows `RESET / TAP TWICE` in its normal state.
+2. Tap once and confirm it changes to `TAP AGAIN / RESET SESSION` without clearing the session yet.
+3. Tap again within the confirmation window and confirm Session RR and Session Record become zero.
+4. Press Current RR once to force a HenrikDev refresh and confirm the reset session remains zero rather than resurrecting old matches.
+5. Restart Stream Deck and confirm the reset session still remains zero.
 
-With a real HenrikDev key and a ranked account:
+Automated tests already cover rapid manual mutations, old matches arriving late, reset boundaries, repeated API snapshots, manual/API reconciliation, a deterministic 1,000 transition state stress run, and a 15 match session rolling through HenrikDev's newest ten match window. The physical check is only verifying persistence through the real Stream Deck host.
 
-1. Confirm Current Rank matches the account's current competitive rank.
-2. Confirm Current RR matches the account's current RR.
-3. Confirm Last Match represents the latest competitive match and its RR movement.
-4. Confirm Headshot %, Damage and ACS populate when recent competitive data exists.
-5. Confirm Top Agent and Agent K/D show coherent values for slot 1.
-6. Confirm Top Map shows a coherent recent map result for slot 1.
-7. On XL, confirm slot 2 and slot 3 agent, map and recent match keys select different records when enough data exists.
-8. Press a metric key and confirm a forced refresh does not blank unrelated keys.
-9. Disconnect the network briefly or otherwise test stale data and confirm last known good values remain visible with the stale warning treatment.
+## 3. Spike timer
 
-## 5. Session tracking
+1. Press Spike Timer and confirm it starts at 45 seconds.
+2. Confirm it advances once per second without making the Stream Deck interface sluggish.
+3. Press while active and confirm the timer resets.
+4. Start it again, allow it to reach zero, and confirm the complete state is readable.
+5. Press after completion and confirm a new 45 second timer starts.
 
-1. Reset the session by holding Session Reset for at least 1.2 seconds.
-2. Confirm a short accidental tap does not reset the session.
-3. Play or wait for a new competitive result and confirm session wins or losses and net RR update after HenrikDev reports it.
-4. Use Log Win or Log Loss with no manual RR and confirm the record updates.
-5. Enter a one time RR adjustment on a manual result key, press it, and confirm the value is consumed and cleared.
-6. After the real match later appears through HenrikDev, confirm the manual result reconciles instead of being permanently counted twice.
-7. Restart Stream Deck and confirm the active session state survives.
+## 4. Clean automatic Competitive result test
 
-## 6. Spike timer
+When a convenient real Competitive match is available:
 
-1. Press Spike Timer and confirm it begins at 45 seconds.
-2. Confirm the display advances without requiring repeated presses.
-3. Confirm warning and critical visual states appear as time decreases.
-4. Press while active and confirm the timer resets.
-5. Let it reach zero and confirm the complete state is readable.
-6. Press after completion and confirm a new 45 second timer starts.
+1. Begin with a known session baseline before the match result appears in HenrikDev.
+2. Do not use Log Win or Log Loss during this test.
+3. After the match is ingested by HenrikDev, press Current RR once if you do not want to wait for the five minute poll.
+4. Confirm Session Record increments exactly once.
+5. Confirm Session RR reflects the reported RR movement exactly once.
+6. Confirm Last Match and recent Competitive statistics update coherently.
 
-## 7. Error states
+Manual Log Win and Log Loss actions remain available as advanced fallbacks but are not part of the default Standard dashboard or the primary automatic workflow.
 
-Verify readable key faces for at least:
+## 5. Packaged profile installation boundary
 
-1. Missing Riot ID.
-2. Invalid Riot ID format.
-3. Missing HenrikDev API key.
-4. Invalid HenrikDev API key.
-5. Rate limited response if practical to reproduce safely.
-6. Offline state.
-7. Account not found.
-8. No recent match or agent data.
-9. Unranked account if an appropriate test account is available.
+Before Marketplace submission, install the actual packaged `.streamDeckPlugin` candidate rather than a developer link and confirm:
 
-No state should leave a permanently blank key.
+1. Standard, XL and Neo profiles install according to the manifest `AutoInstall` declarations for the applicable connected device models.
+2. Installation does not unexpectedly switch the user's active profile because `DontAutoSwitchWhenInstalled` is enabled.
+3. Bundled profiles remain editable.
 
-## 8. Readability and interaction
+## 6. Final release decisions
 
-Check Standard, XL and Neo where hardware is available:
+Before paid Marketplace release:
 
-1. Rank and RR are readable at normal desk distance.
-2. Session RR positive and negative states are immediately distinguishable.
-3. Win and loss controls cannot be confused at a glance.
-4. Agent and map names do not clip in common cases.
-5. Long names degrade gracefully rather than overflowing the key.
-6. Touch or key presses do not feel delayed because of background API work.
-7. Repeated rapid refresh presses do not create visible instability.
+1. Confirm the applicable HenrikDev project support arrangement for a paid product.
+2. Confirm final Marketplace price and listing copy.
+3. Perform one final package install and visual scan of the Marketplace art/release kit.
 
 ## Release boundary
 
-The product may move from automated QA complete to release ready only after:
-
-1. The packaged plugin installs successfully.
-2. At least one real HenrikDev account passes live data smoke testing.
-3. At least the Standard profile imports and resolves correctly on current Stream Deck software.
-4. Any hardware models available for final testing pass readability and interaction checks.
-5. Final marketplace price and listing review are approved.
+The code path is release candidate quality once the automated gate is green. The remaining release blockers are the exact current host smoke test above, packaged profile auto installation behavior, HenrikDev paid project support confirmation, and final pricing/submission approval.
