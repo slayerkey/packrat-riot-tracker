@@ -53,7 +53,7 @@ jobs:
         run: python scripts/profile_qa.py
 
       - name: Build deterministic Marketplace art
-        run: python scripts/build_marketplace_art.py
+        run: python scripts/build_marketplace_art_v2.py
 
       - name: Validate Marketplace art
         run: python scripts/marketplace_art_qa.py
