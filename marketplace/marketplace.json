@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "slug": "valorant-tracker",
+  "name": "Valorant Tracker",
+  "version": "1.0.0",
+  "type": "plugin",
+  "author": "PackRat",
+  "price_usd_candidate": 7.99,
+  "price_status": "candidate_until_maker_console_review",
+  "short_description": "Track Valorant rank, RR, automatic session progress and recent competitive stats directly on Stream Deck.",
+  "description": "Turn Stream Deck into a physical Valorant ranked dashboard. See your current rank and RR, automatically track session RR plus wins and losses as Competitive results arrive, review your latest match, headshot percentage, top agents, maps, ACS and damage without leaving the game, and keep a built in 45 second spike timer under your hand. Setup is shared across every action: enter your Riot ID and your own HenrikDev API key once in the Property Inspector. The plugin normally detects the account region automatically, with a selectable region available as fallback. Advanced manual win and loss actions remain available when you need a fallback, but the bundled Standard dashboard is built around automatic tracking. Includes editable dashboard profiles for Standard, XL and Neo.",
+  "features": [
+    "20 Stream Deck actions",
+    "Current Valorant rank and RR",
+    "Automatic persistent session RR and win loss tracking",
+    "Recent competitive headshot percentage, ACS and damage",
+    "Top agents with K/D and win rate",
+    "Top maps with win rate",
+    "Recent match actions for expanded dashboards",
+    "45 second spike timer",
+    "Advanced manual win and loss fallback with later API reconciliation",
+    "One shared account setup across all actions",
+    "Automatic region detection with selectable fallback region",
+    "Five minute shared cache to reduce HenrikDev API usage",
+    "Last known good data during temporary API or network failures",
+    "Bundled Standard, XL and Neo dashboard profiles",
+    "Windows and macOS builds validated in CI"
+  ],
+  "setup": [
+    "Install Valorant Tracker and add an action or open a bundled dashboard.",
+    "Open the action Property Inspector.",
+    "Enter your Riot ID in Name#TAG format.",
+    "Leave the fallback region at its default unless automatic region detection cannot resolve the account.",
+    "Open the HenrikDev dashboard, generate an API key and paste it once.",
+    "Optionally set an act end date for the Act Countdown action."
+  ],
+  "compatibility": {
+    "stream_deck_software_minimum": "6.9",
+    "windows_minimum": "10",
+    "macos_minimum": "12",
+    "bundled_profiles": [
+      "Standard 15 key",
+      "Stream Deck XL",
+      "Stream Deck Neo"
+    ]
+  },
+  "keywords": [
+    "valorant",
+    "rank",
+    "rr",
+    "ranked",
+    "tracker",
+    "gaming",
+    "stats",
+    "spike timer"
+  ],
+  "gallery_order": [
+    "1-thumbnail.png",
+    "2-session.png",
+    "3-xl.png",
+    "4-controls.png",
+    "5-setup.png"
+  ],
+  "app_icon": "app-icon.png",
+  "backend": "HenrikDev",
+  "backend_disclosure": "HenrikDev is an independent third party community API. Availability, endpoint behavior and rate limits are controlled by HenrikDev rather than PackRat.",
+  "privacy": "Riot ID, fallback region, HenrikDev API key, session state and cache are stored locally using Stream Deck settings. Player requests are sent to HenrikDev only. PackRat does not receive the API key or player data and the plugin has no PackRat analytics endpoint.",
+  "disclaimer": "Not affiliated with, endorsed by, or sponsored by Riot Games or HenrikDev."
+}

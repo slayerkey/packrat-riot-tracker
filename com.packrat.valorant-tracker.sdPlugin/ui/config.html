@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width,initial-scale=1" />
+	<title>Valorant Tracker</title>
+	<link rel="stylesheet" href="pi.css" />
+</head>
+<body>
+	<main>
+		<section class="hero">
+			<div class="eyebrow">PACKRAT</div>
+			<h1>Valorant Tracker</h1>
+			<p>Set your account once. Every Valorant Tracker key uses these shared settings.</p>
+		</section>
+
+		<section class="card">
+			<h2>Riot Account</h2>
+			<label for="riotId">Riot ID</label>
+			<input id="riotId" type="text" autocomplete="off" spellcheck="false" placeholder="Name#TAG" />
+			<div class="help">Include the tag after # exactly as it appears in Valorant. Track only an account you own or have permission to use.</div>
+
+			<label for="region">Region fallback</label>
+			<select id="region">
+				<option value="na">North America (NA)</option>
+				<option value="eu">Europe (EU)</option>
+				<option value="ap">Asia Pacific (AP)</option>
+				<option value="kr">Korea (KR)</option>
+				<option value="latam">Latin America (LATAM)</option>
+				<option value="br">Brazil (BR)</option>
+			</select>
+			<div class="help">The plugin normally detects the account region automatically from HenrikDev. This selection is only used as a fallback.</div>
+		</section>
+
+		<section class="card">
+			<h2>HenrikDev API</h2>
+			<label for="apiKey">API Key</label>
+			<input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="HenrikDev API key" />
+			<div class="help steps">
+				<strong>API setup</strong>
+				<span>1. Open the HenrikDev dashboard</span>
+				<span>2. Open API Keys and generate a key</span>
+				<span>3. Paste it here</span>
+			</div>
+			<button id="openHenrikDashboard" type="button">Open HenrikDev Dashboard</button>
+			<div class="help third-party">HenrikDev is an independent third-party community API. Availability and rate limits are controlled by HenrikDev.</div>
+		</section>
+
+		<section class="card">
+			<h2>Act Countdown</h2>
+			<label for="actEndDate">Act end date <span class="optional">optional</span></label>
+			<input id="actEndDate" type="datetime-local" />
+			<div class="help">Only used by the optional Act Countdown action.</div>
+		</section>
+
+		<section id="slotCard" class="card hidden">
+			<h2>Key Display</h2>
+			<label for="slot">Statistic slot</label>
+			<select id="slot">
+				<option value="1">#1</option>
+				<option value="2">#2</option>
+				<option value="3">#3</option>
+				<option value="4">#4</option>
+				<option value="5">#5</option>
+			</select>
+			<div class="help">Use multiple copies of this action for an expanded XL dashboard.</div>
+		</section>
+
+		<section id="manualRrCard" class="card hidden">
+			<h2>Advanced Manual Fallback</h2>
+			<label for="manualRr">RR adjustment <span class="optional">optional, one time</span></label>
+			<input id="manualRr" type="number" step="1" min="-100" max="100" placeholder="Example: 22 or -18" />
+			<div class="help">Competitive matches are tracked automatically. Use Log Win or Log Loss only as a fallback when automatic match data is unavailable. This RR value is consumed after one manual log.</div>
+		</section>
+
+		<section class="privacy">
+			<strong>Privacy</strong>
+			<p>Your Riot ID and HenrikDev key are stored in Stream Deck global settings on this computer. Player requests go to HenrikDev only. PackRat does not receive your API key.</p>
+		</section>
+	</main>
+	<script src="pi.js"></script>
+</body>
+</html>

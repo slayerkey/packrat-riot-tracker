@@ -6,15 +6,9 @@ import path from "node:path";
 import url from "node:url";
 
 const isWatching = !!process.env.ROLLUP_WATCH;
-const sdPlugin = "com.packrat.riot-tracker.sdPlugin";
+const sdPlugin = "com.packrat.valorant-tracker.sdPlugin";
 
-/**
- * Self-contained plugin: unlike the ESPN based trackers, this one does not import
- * plugins/_shared. Riot's API is a different domain (personal account, personal key, no game
- * schedule), so it gets its own client, cache, poller and badge renderer under src/.
- *
- * @type {import('rollup').RollupOptions}
- */
+/** @type {import('rollup').RollupOptions} */
 const config = {
 	input: "src/plugin.ts",
 	output: {
@@ -42,8 +36,6 @@ const config = {
 			exportConditions: ["node"],
 			preferBuiltins: true,
 			extensions: [".ts", ".mjs", ".js", ".json", ".node"],
-			// Load bearing (see ufc-tracker's README): without dedupe the SDK can resolve to two
-			// separate copies and every settings call hangs forever with no error.
 			dedupe: ["@elgato/streamdeck", "@elgato/utils", "ws"]
 		}),
 		commonjs(),

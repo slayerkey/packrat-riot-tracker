@@ -1,0 +1,137 @@
+name: Valorant Tracker CI
+
+on:
+  push:
+    branches:
+      - product/valorant-tracker
+  workflow_dispatch:
+
+concurrency:
+  group: valorant-tracker-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install locked Node dependencies
+        run: npm ci
+
+      - name: Type check plugin
+        run: npm run typecheck
+
+      - name: Install locked Marketplace art dependencies
+        run: python -m pip install --disable-pip-version-check -r scripts/marketplace-art-requirements.txt
+
+      - name: Run fixture tests
+        run: npm test
+
+      - name: Build deterministic visual fixtures
+        run: npm run visual:fixtures
+
+      - name: Build bundled dashboard profiles
+        run: python scripts/build_profiles.py
+
+      - name: Validate dashboard profile definitions
+        run: python scripts/profile_qa.py
+
+      - name: Build deterministic Marketplace art
+        run: python scripts/build_marketplace_art_v2.py
+
+      - name: Validate Marketplace art
+        run: python scripts/marketplace_art_qa.py
+
+      - name: Run RatPack structural QA
+        run: python scripts/valorant_qa.py
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Validate with Elgato CLI
+        run: npx @elgato/cli validate com.packrat.valorant-tracker.sdPlugin --no-update-check
+
+      - name: Package Stream Deck plugin
+        run: npx @elgato/cli pack com.packrat.valorant-tracker.sdPlugin --output dist --no-update-check
+
+      - name: Build complete Marketplace release kit
+        run: python scripts/build_release_kit.py
+
+      - name: Upload release candidate and QA evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: valorant-tracker-release-candidate
+          path: |
+            dist/*.streamDeckPlugin
+            dist/valorant-tracker-release.zip
+            dist/valorant-qa.json
+            dist/marketplace-art-qa.json
+            dist/visual-fixtures/*.svg
+            dist/marketplace-art/*.png
+            com.packrat.valorant-tracker.sdPlugin/profiles/*.streamDeckProfile
+            marketplace/marketplace.json
+            marketplace/release-notes.md
+          if-no-files-found: error
+
+  platform-smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Type check plugin
+        run: npm run typecheck
+
+      - name: Run fixture tests
+        run: npm test
+
+      - name: Build deterministic visual fixtures
+        run: npm run visual:fixtures
+
+      - name: Build bundled dashboard profiles
+        run: python scripts/build_profiles.py
+
+      - name: Validate dashboard profiles
+        run: python scripts/profile_qa.py
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Validate with Elgato CLI
+        run: npx @elgato/cli validate com.packrat.valorant-tracker.sdPlugin --no-update-check

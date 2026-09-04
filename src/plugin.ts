@@ -1,25 +1,63 @@
 import streamDeck from "@elgato/streamdeck";
 
-import { LolRankAction } from "./actions/lol-rank";
-import { TftRankAction } from "./actions/tft-rank";
+import {
+	AcsAction,
+	ActCountdownAction,
+	AgentKdAction,
+	AgentWinRateAction,
+	DamageAction,
+	HeadshotAction,
+	LastMatchAction,
+	LogLossAction,
+	LogWinAction,
+	MapWinRateAction,
+	RankAction,
+	RecentMatchAction,
+	RefreshAction,
+	RrAction,
+	SessionRecordAction,
+	SessionResetAction,
+	SessionRrAction,
+	SpikeTimerAction,
+	TopAgentAction,
+	TopMapAction
+} from "./valorant/actions";
 import { startPoller } from "./poller";
+import { valorantService } from "./valorant/service";
 
 streamDeck.logger.setLevel("info");
 
-const lolRank = new LolRankAction();
-const tftRank = new TftRankAction();
+const actions = [
+	new RankAction(),
+	new RrAction(),
+	new SessionRrAction(),
+	new SessionRecordAction(),
+	new LastMatchAction(),
+	new HeadshotAction(),
+	new TopAgentAction(),
+	new AgentKdAction(),
+	new AgentWinRateAction(),
+	new DamageAction(),
+	new TopMapAction(),
+	new MapWinRateAction(),
+	new AcsAction(),
+	new RecentMatchAction(),
+	new ActCountdownAction(),
+	new SpikeTimerAction(),
+	new LogWinAction(),
+	new LogLossAction(),
+	new SessionResetAction(),
+	new RefreshAction()
+];
 
-streamDeck.actions.registerAction(lolRank);
-streamDeck.actions.registerAction(tftRank);
+for (const action of actions) streamDeck.actions.registerAction(action);
 
-// Polling has to wait for the connection: the first thing a poll does is write the cache to
-// global settings, and that call simply never resolves if the websocket is not up yet.
-streamDeck.connect().then(() => {
+streamDeck.connect().then(async () => {
+	await valorantService.initialize();
 	startPoller({
-		run: async () => {
-			await lolRank.pollAll();
-			await tftRank.pollAll();
-		},
-		onError: (error) => streamDeck.logger.error("poll failed", error)
+		run: () => valorantService.refresh(false).then(() => undefined),
+		onError: (error) => streamDeck.logger.error("Valorant poll failed", error)
 	});
+	// Visible metric keys schedule one shared refresh after profile appearance. Avoid an eager
+	// startup request here so Stream Deck can finish restoring profiles and plugin settings first.
 });
